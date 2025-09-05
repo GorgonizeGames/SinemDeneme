@@ -1,0 +1,28 @@
+{
+  "name": "com.gorgonize.hierarchy-decorator",
+  "displayName": "Gorgonize Hierarchy Decorator",
+  "version": "1.0.0",
+  "unity": "2019.4",
+  "description": "Professional AAA-grade Hierarchy Decorator System that provides advanced visual enhancements for Unity's Hierarchy window. Features include component icons, custom styling rules, header separators, and interactive elements.",
+  "keywords": [
+    "editor",
+    "hierarchy",
+    "decorator",
+    "ui",
+    "productivity",
+    "gorgonize"
+  ],
+  "category": "Editor Extensions",
+  "dependencies": {},
+  "author": {
+    "name": "Gorgonize Games",
+    "email": "info@gorgonize.com",
+    "url": "https://gorgonize.com"
+  },
+  "type": "tool",
+  "hideInEditor": false,
+  "changelogUrl": "https://github.com/gorgonize/hierarchy-decorator/blob/main/CHANGELOG.md",
+  "documentationUrl": "https://github.com/gorgonize/hierarchy-decorator/blob/main/README.md",
+  "licensesUrl": "https://github.com/gorgonize/hierarchy-decorator/blob/main/LICENSE.md",
+  "samples": []
+}

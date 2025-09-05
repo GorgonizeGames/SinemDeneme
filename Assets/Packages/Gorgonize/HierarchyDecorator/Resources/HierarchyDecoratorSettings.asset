@@ -1,0 +1,158 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a13d2ffa0cb355442bedcc04c86f5391, type: 3}
+  m_Name: HierarchyDecoratorSettings
+  m_EditorClassIdentifier: Gorgonize.HierarchyDecorator.Editor::Gorgonize.Plugins.HierarchyDecorator.Core.Editor.HierarchyDecoratorSettings
+  PackageInfo: 'Gorgonize Hierarchy Decorator v1.1.0
+
+    Place this file in: Plugins/Gorgonize/HierarchyDecorator/Resources/
+
+    Current
+    asset path: Assets/Plugins/GorgonizeGames/HierarchyDecorator/Resources/HierarchyDecoratorSettings.asset'
+  IsEnabled: 1
+  HeaderPrefix: ---
+  HeaderBackgroundColor: {r: 0.15, g: 0.15, b: 0.15, a: 1}
+  HeaderTextColor: {r: 1, g: 1, b: 1, a: 1}
+  HeaderFontStyle: 1
+  HeaderFontSize: 13
+  HeaderAlignment: 4
+  ShowActiveToggle: 1
+  ShowAllComponentIcons: 1
+  MaxComponentIcons: 3
+  ExcludedComponentNames:
+  - Transform
+  - CanvasRenderer
+  - UniversalAdditionalCameraData
+  - UniversalAdditionalLightData
+  - Volume
+  TagRules:
+  - Enabled: 1
+    Icon: {fileID: 0}
+    Alignment: 0
+    BackgroundColor: {r: 1, g: 0, b: 0, a: 0}
+    OverrideTextColor: 1
+    TextColor: {r: 1, g: 1, b: 1, a: 0}
+    Tag: MainCamera
+    Description: 
+  LayerRules: []
+  ComponentIcons:
+  - Enabled: 1
+    ComponentName: Camera
+    BuiltInIconName: Camera Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 1
+    Description: Main scene camera
+  - Enabled: 1
+    ComponentName: Light
+    BuiltInIconName: Light Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 1
+    Description: Scene lighting
+  - Enabled: 1
+    ComponentName: AudioSource
+    BuiltInIconName: AudioSource Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 1
+    Description: Audio playback
+  - Enabled: 1
+    ComponentName: Rigidbody
+    BuiltInIconName: Rigidbody Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: 3D physics body
+  - Enabled: 1
+    ComponentName: BoxCollider
+    BuiltInIconName: BoxCollider Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: Box collision shape
+  - Enabled: 1
+    ComponentName: SphereCollider
+    BuiltInIconName: SphereCollider Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: Sphere collision shape
+  - Enabled: 1
+    ComponentName: CapsuleCollider
+    BuiltInIconName: CapsuleCollider Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: Capsule collision shape
+  - Enabled: 1
+    ComponentName: Rigidbody2D
+    BuiltInIconName: Rigidbody2D Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: 2D physics body
+  - Enabled: 1
+    ComponentName: BoxCollider2D
+    BuiltInIconName: BoxCollider2D Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: 2D box collider
+  - Enabled: 1
+    ComponentName: CircleCollider2D
+    BuiltInIconName: CircleCollider2D Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: 2D circle collider
+  - Enabled: 1
+    ComponentName: MeshRenderer
+    BuiltInIconName: MeshRenderer Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: 3D mesh rendering
+  - Enabled: 1
+    ComponentName: SpriteRenderer
+    BuiltInIconName: SpriteRenderer Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: 2D sprite rendering
+  - Enabled: 1
+    ComponentName: ParticleSystem
+    BuiltInIconName: ParticleSystem Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: Particle effects
+  - Enabled: 1
+    ComponentName: Animator
+    BuiltInIconName: Animator Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: Animation controller
+  - Enabled: 1
+    ComponentName: Canvas
+    BuiltInIconName: Canvas Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 1
+    Description: UI canvas
+  - Enabled: 1
+    ComponentName: Image
+    BuiltInIconName: Image Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: UI image
+  - Enabled: 1
+    ComponentName: Text
+    BuiltInIconName: Text Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: UI text
+  - Enabled: 1
+    ComponentName: Button
+    BuiltInIconName: Button Icon
+    CustomIcon: {fileID: 0}
+    Alignment: 0
+    Description: UI button
+  UseRowStriping: 0
+  EvenRowColor: {r: 0, g: 0, b: 0, a: 0}
+  OddRowColor: {r: 0, g: 0, b: 0, a: 0}
