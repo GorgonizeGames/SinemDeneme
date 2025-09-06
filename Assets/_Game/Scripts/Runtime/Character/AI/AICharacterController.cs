@@ -33,8 +33,6 @@ namespace Game.Runtime.Character.AI
         {
             SetupNavMeshAgent();
             SetupAIBehavior();
-            
-            // ✅ Sync CharacterType with AIRole
             SyncCharacterType();
             
             if (enableDebugLogs)
@@ -43,7 +41,6 @@ namespace Game.Runtime.Character.AI
 
         private void SyncCharacterType()
         {
-            // ✅ Keep CharacterType in sync with AIRole
             switch (aiRole)
             {
                 case AIRole.Customer:
@@ -70,7 +67,6 @@ namespace Game.Runtime.Character.AI
 
         protected virtual void SetupAIBehavior()
         {
-            // Factory pattern for creating AI behaviors
             _currentBehavior = AIBehaviorFactory.CreateBehavior(aiRole, this);
             _currentBehavior?.Initialize();
         }
@@ -92,7 +88,6 @@ namespace Game.Runtime.Character.AI
         {
             if (navMeshAgent.hasPath && navMeshAgent.velocity.magnitude > 0.1f)
             {
-                // Convert 3D NavMesh velocity to 2D input for CharacterMotor
                 Vector3 velocity = navMeshAgent.desiredVelocity.normalized;
                 Vector2 movementInput = new Vector2(velocity.x, velocity.z);
                 SetMovementInput(movementInput);
@@ -109,7 +104,6 @@ namespace Game.Runtime.Character.AI
             }
         }
 
-        // Public AI control methods
         public virtual bool MoveTo(Vector3 destination)
         {
             if (IsValidDestination(destination))
@@ -126,14 +120,22 @@ namespace Game.Runtime.Character.AI
             return false;
         }
 
+        // ✅ FIXED: Null reference exception eliminated
         public virtual void Stop()
         {
             navMeshAgent.ResetPath();
             _isMovingToTarget = false;
             SetMovementInput(Vector2.zero);
             
-            // ✅ Also stop the CharacterMotor
-            _motor.Stop();
+            // ✅ SAFE: _motor is now accessible from base class (protected)
+            if (_motor != null)
+            {
+                _motor.Stop();
+            }
+            else
+            {
+                Debug.LogError("❌ CharacterMotor is null in AICharacterController!", this);
+            }
         }
 
         public virtual void SetRole(AIRole newRole)
@@ -141,7 +143,7 @@ namespace Game.Runtime.Character.AI
             if (aiRole != newRole)
             {
                 aiRole = newRole;
-                SyncCharacterType(); // ✅ Sync when role changes
+                SyncCharacterType();
                 SetupAIBehavior();
             }
         }
@@ -152,7 +154,6 @@ namespace Game.Runtime.Character.AI
             return NavMesh.SamplePosition(destination, out hit, navMeshSampleDistance, NavMesh.AllAreas);
         }
 
-        // Gizmos for debugging
         void OnDrawGizmosSelected()
         {
             if (navMeshAgent != null && navMeshAgent.hasPath)

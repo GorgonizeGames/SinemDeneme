@@ -39,7 +39,6 @@ namespace Game.Runtime.Character
             SetupStateMachine();
             SetupGameStateHandling();
             
-            // ✅ Idle state ile başla
             _stateMachine.ChangeState<CharacterIdleState>();
             
             OnInitialize();
@@ -65,10 +64,7 @@ namespace Game.Runtime.Character
         {
             if (_gameManager.CurrentState != GameState.Playing) return;
             
-            // ✅ Önce input'u al
             HandleInput();
-            
-            // ✅ Sonra state machine'i güncelle
             _stateMachine.Update();
         }
 
@@ -76,7 +72,6 @@ namespace Game.Runtime.Character
         {
             if (_gameManager.CurrentState != GameState.Playing) return;
             
-            // ✅ State machine fiziksel güncellemeleri handle eder
             _stateMachine.FixedUpdate();
         }
 
