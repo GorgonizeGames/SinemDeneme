@@ -44,13 +44,11 @@ namespace Game.Runtime.Character.Motor
             }
         }
 
-        // ✅ Sadece input'u kaydet, hareket etme
         public void SetMovementInput(Vector2 input)
         {
             _movementInput = new Vector3(input.x, 0, input.y);
         }
 
-        // ✅ State'ler tarafından çağrılacak - fiziksel hareket
         public void ExecuteMovement()
         {
             if (characterSettings == null) return;
@@ -70,7 +68,7 @@ namespace Game.Runtime.Character.Motor
             UpdateAnimation(_movementInput.magnitude);
         }
 
-        // ✅ Durma komutu - state'ler için
+        // ✅ ADDED - Stop method that was missing
         public void Stop()
         {
             _movementInput = Vector3.zero;
@@ -104,21 +102,19 @@ namespace Game.Runtime.Character.Motor
             CharacterAnimator.SetBool(_isMovingHash, isMoving);
         }
 
-        // Backward compatibility için eski Move metodu
+        // Backward compatibility
         public void Move(Vector2 input)
         {
             SetMovementInput(input);
             ExecuteMovement();
         }
 
-        // Runtime settings change
         public void SetCharacterSettings(CharacterSettings newSettings)
         {
             characterSettings = newSettings;
             ApplyPhysicsSettings();
         }
 
-        // Power-up support
         public void ApplySpeedBoost(float multiplier, float duration)
         {
             characterSettings?.ApplySpeedBoost(multiplier, duration);

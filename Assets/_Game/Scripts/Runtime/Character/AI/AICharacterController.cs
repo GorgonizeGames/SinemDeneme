@@ -34,8 +34,28 @@ namespace Game.Runtime.Character.AI
             SetupNavMeshAgent();
             SetupAIBehavior();
             
+            // ✅ Sync CharacterType with AIRole
+            SyncCharacterType();
+            
             if (enableDebugLogs)
-                Debug.Log($"🤖 AI Character initialized - Role: {aiRole}");
+                Debug.Log($"🤖 AI Character initialized - Role: {aiRole}, Type: {characterType}");
+        }
+
+        private void SyncCharacterType()
+        {
+            // ✅ Keep CharacterType in sync with AIRole
+            switch (aiRole)
+            {
+                case AIRole.Customer:
+                    characterType = CharacterType.AI_Customer;
+                    break;
+                case AIRole.Employee:
+                    characterType = CharacterType.AI_Employee;
+                    break;
+                case AIRole.Cashier:
+                    characterType = CharacterType.AI_Cashier;
+                    break;
+            }
         }
 
         protected virtual void SetupNavMeshAgent()
@@ -111,6 +131,9 @@ namespace Game.Runtime.Character.AI
             navMeshAgent.ResetPath();
             _isMovingToTarget = false;
             SetMovementInput(Vector2.zero);
+            
+            // ✅ Also stop the CharacterMotor
+            _motor.Stop();
         }
 
         public virtual void SetRole(AIRole newRole)
@@ -118,6 +141,7 @@ namespace Game.Runtime.Character.AI
             if (aiRole != newRole)
             {
                 aiRole = newRole;
+                SyncCharacterType(); // ✅ Sync when role changes
                 SetupAIBehavior();
             }
         }

@@ -3,7 +3,7 @@ using Game.Runtime.Core.StateMachine;
 
 namespace Game.Runtime.Character
 {
-public interface ICharacterController
+    public interface ICharacterController
     {
         Transform Transform { get; }
         Animator Animator { get; }
@@ -16,8 +16,8 @@ public interface ICharacterController
     public enum CharacterType
     {
         Player,
-        AI_Crew,
-        AI_Custumer,
-        AI_Chasier
+        AI_Customer,    
+        AI_Employee,    
+        AI_Cashier      
     }
 }
