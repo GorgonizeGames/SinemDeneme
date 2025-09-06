@@ -1,6 +1,7 @@
 using UnityEngine;
 using Game.Runtime.Core.StateMachine;
 using Game.Runtime.Character.Motor;
+using Game.Runtime.Character.Interfaces;
 
 namespace Game.Runtime.Character.States
 {
@@ -19,6 +20,9 @@ namespace Game.Runtime.Character.States
         public override void OnUpdate(ICharacterController owner)
         {
             // ✅ Input kontrolü - hareket yoksa Idle state'e geç
+
+            _motor.SetMovementInput(owner.MovementInput);
+
             if (owner.MovementInput.magnitude < 0.1f)
             {
                 owner.ChangeState<CharacterIdleState>();
@@ -28,7 +32,6 @@ namespace Game.Runtime.Character.States
         public override void OnFixedUpdate(ICharacterController owner)
         {
             // ✅ SADECE Moving state'te fiziksel hareket
-            _motor.SetMovementInput(owner.MovementInput);
             _motor.ExecuteMovement();
         }
 

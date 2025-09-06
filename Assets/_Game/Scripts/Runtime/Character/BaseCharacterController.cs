@@ -5,10 +5,12 @@ using Game.Runtime.Core.StateMachine;
 using Game.Runtime.Game;
 using Game.Runtime.Character.Motor;
 using Game.Runtime.Character.States;
+using Game.Runtime.Character.Components;
+using Game.Runtime.Character.Interfaces;
 
 namespace Game.Runtime.Character
 {
-    [RequireComponent(typeof(CharacterMotor))]
+    [RequireComponent(typeof(CharacterMotor), typeof(CarryingController), typeof(CharacterTriggerDetector))]
     public abstract class BaseCharacterController : MonoBehaviour, ICharacterController
     {
         [Header("Character Info")]
@@ -17,6 +19,8 @@ namespace Game.Runtime.Character
         [Inject] protected IGameManager _gameManager;
 
         protected CharacterMotor _motor;
+        protected CarryingController _carryingController; // ✅ Added
+        protected CharacterTriggerDetector _triggerDetector; // ✅ Added
         protected StateMachine<ICharacterController> _stateMachine;
         protected Vector2 _currentMovementInput;
 
@@ -25,6 +29,7 @@ namespace Game.Runtime.Character
         public Vector2 MovementInput => _currentMovementInput;
         public CharacterType CharacterType => characterType;
         public CharacterSettings Settings => _motor.Settings;
+        public ICarryingController CarryingController => _carryingController; // ✅ Added
 
         void Start()
         {
@@ -35,6 +40,8 @@ namespace Game.Runtime.Character
         protected virtual void Initialize()
         {
             _motor = GetComponent<CharacterMotor>();
+            _carryingController = GetComponent<CarryingController>(); // ✅ Added
+            _triggerDetector = GetComponent<CharacterTriggerDetector>(); // ✅ Added
             
             SetupStateMachine();
             SetupGameStateHandling();
@@ -103,6 +110,12 @@ namespace Game.Runtime.Character
             {
                 SetMovementInput(Vector2.zero);
                 _motor.Stop();
+                
+                // Force drop item if game paused/stopped
+                if (_carryingController.IsCarrying)
+                {
+                    _carryingController.ForceDropItem();
+                }
             }
         }
 

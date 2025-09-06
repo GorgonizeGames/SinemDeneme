@@ -1,3 +1,4 @@
+// Assets/_Game/Scripts/Runtime/Character/PlayerCharacterController.cs (Simplified)
 using UnityEngine;
 using Game.Runtime.Core.DI;
 using Game.Runtime.Input;
@@ -31,12 +32,13 @@ namespace Game.Runtime.Character
         {
             if (_inputService == null) return;
 
+            // Sadece joystick movement input
             Vector2 input = _inputService.MovementInput;
             SetMovementInput(input);
 
             if (enableInputDebug && input.magnitude > 0.1f)
             {
-                Debug.Log($"🎮 Player Input: {input} | Speed: {Settings?.MoveSpeed ?? 0}");
+                Debug.Log($"🎮 Player Input: {input} | Speed: {Settings?.MoveSpeed ?? 0} | Carrying: {_carryingController.IsCarrying}");
             }
         }
 

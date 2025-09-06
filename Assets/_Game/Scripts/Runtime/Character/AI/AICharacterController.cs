@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.AI;
-using Game.Runtime.Core.DI;
+using Game.Runtime.Items.Interfaces;
+using Game.Runtime.Character.Interfaces;
 
 namespace Game.Runtime.Character.AI
 {
@@ -17,11 +18,19 @@ namespace Game.Runtime.Character.AI
         [SerializeField] protected float decisionInterval = 1f;
         [SerializeField] protected bool enableDebugLogs = false;
 
+        [Header("AI Pickup Settings")]
+        [SerializeField] protected float pickupRange = 1.5f;
+        [SerializeField] protected bool enableSmartPickup = true;
+
         // AI Behavior System
         protected IAIBehavior _currentBehavior;
         protected float _lastDecisionTime;
         protected Vector3 _targetDestination;
         protected bool _isMovingToTarget;
+
+        // AI Task System
+        protected IPickupable _targetItem;
+        protected Transform _targetDropZone;
 
         // Public properties
         public NavMeshAgent NavAgent => navMeshAgent;
@@ -61,8 +70,8 @@ namespace Game.Runtime.Character.AI
                 navMeshAgent = GetComponent<NavMeshAgent>();
 
             navMeshAgent.stoppingDistance = stoppingDistance;
-            navMeshAgent.updateRotation = false; // CharacterMotor handles rotation
-            navMeshAgent.updatePosition = false; // CharacterMotor handles position
+            navMeshAgent.updateRotation = false;
+            navMeshAgent.updatePosition = false;
         }
 
         protected virtual void SetupAIBehavior()
@@ -77,11 +86,68 @@ namespace Game.Runtime.Character.AI
             if (Time.time - _lastDecisionTime >= decisionInterval)
             {
                 _currentBehavior?.UpdateBehavior();
+                
+                // AI pickup logic
+                if (enableSmartPickup)
+                {
+                    HandleAIPickupLogic();
+                }
+                
                 _lastDecisionTime = Time.time;
             }
 
             // Convert NavMesh movement to CharacterMotor input
             UpdateMovementFromNavMesh();
+        }
+
+        protected virtual void HandleAIPickupLogic()
+        {
+            // Only employees should actively pickup items for now
+            if (aiRole != AIRole.Employee) return;
+
+            if (!_carryingController.IsCarrying && _targetItem == null)
+            {
+                // Look for items to pickup using trigger detector
+                FindNearbyItems();
+            }
+            else if (_carryingController.IsCarrying && _targetDropZone == null)
+            {
+                // Look for drop zones using trigger detector
+                FindNearbyDropZones();
+            }
+        }
+
+        private void FindNearbyItems()
+        {
+            var nearbyItems = _triggerDetector.NearbyItems;
+            
+            foreach (var item in nearbyItems)
+            {
+                if (_carryingController.CanPickupItem(item))
+                {
+                    _targetItem = item;
+                    MoveTo(item.Transform.position);
+                    
+                    if (enableDebugLogs)
+                        Debug.Log($"🤖 AI found target item: {item.ItemId}");
+                    break;
+                }
+            }
+        }
+
+        private void FindNearbyDropZones()
+        {
+            var nearbyDropZones = _triggerDetector.NearbyDropZones;
+            
+            foreach (var dropZone in nearbyDropZones)
+            {
+                _targetDropZone = dropZone.transform;
+                MoveTo(dropZone.transform.position);
+                
+                if (enableDebugLogs)
+                    Debug.Log($"🤖 AI found target drop zone: {dropZone.ZoneId}");
+                break;
+            }
         }
 
         protected virtual void UpdateMovementFromNavMesh()
@@ -92,7 +158,6 @@ namespace Game.Runtime.Character.AI
                 Vector2 movementInput = new Vector2(velocity.x, velocity.z);
                 SetMovementInput(movementInput);
 
-                // Sync position with NavMeshAgent
                 if (!navMeshAgent.updatePosition)
                 {
                     navMeshAgent.nextPosition = transform.position;
@@ -101,6 +166,39 @@ namespace Game.Runtime.Character.AI
             else
             {
                 SetMovementInput(Vector2.zero);
+                
+                // Check if we reached target item or drop zone
+                CheckTargetReached();
+            }
+        }
+
+        private void CheckTargetReached()
+        {
+            // Check if we reached target item
+            if (_targetItem != null && !_carryingController.IsCarrying)
+            {
+                float distance = Vector3.Distance(transform.position, _targetItem.Transform.position);
+                if (distance <= stoppingDistance)
+                {
+                    bool success = _carryingController.TryPickupItem(_targetItem);
+                    if (success)
+                    {
+                        if (enableDebugLogs)
+                            Debug.Log($"🤖 AI picked up item: {_targetItem.ItemId}");
+                    }
+                    _targetItem = null;
+                }
+            }
+
+            // Check if we reached drop zone
+            if (_targetDropZone != null && _carryingController.IsCarrying)
+            {
+                float distance = Vector3.Distance(transform.position, _targetDropZone.position);
+                if (distance <= stoppingDistance)
+                {
+                    // Drop zones handle auto-drop, just clear target
+                    _targetDropZone = null;
+                }
             }
         }
 
@@ -120,14 +218,12 @@ namespace Game.Runtime.Character.AI
             return false;
         }
 
-        // ✅ FIXED: Null reference exception eliminated
         public virtual void Stop()
         {
             navMeshAgent.ResetPath();
             _isMovingToTarget = false;
             SetMovementInput(Vector2.zero);
             
-            // ✅ SAFE: _motor is now accessible from base class (protected)
             if (_motor != null)
             {
                 _motor.Stop();
@@ -171,6 +267,10 @@ namespace Game.Runtime.Character.AI
                 Gizmos.color = Color.red;
                 Gizmos.DrawWireSphere(_targetDestination, 0.5f);
             }
+
+            // Draw pickup range
+            Gizmos.color = Color.blue;
+            Gizmos.DrawWireSphere(transform.position, pickupRange);
         }
     }
 

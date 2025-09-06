@@ -1,6 +1,7 @@
 using UnityEngine;
 using Game.Runtime.Core.StateMachine;
 using Game.Runtime.Character.Motor;
+using Game.Runtime.Character.Interfaces;
 
 namespace Game.Runtime.Character.States
 {

@@ -68,7 +68,6 @@ namespace Game.Runtime.Character.Motor
             UpdateAnimation(_movementInput.magnitude);
         }
 
-        // ✅ ADDED - Stop method that was missing
         public void Stop()
         {
             _movementInput = Vector3.zero;
@@ -100,13 +99,6 @@ namespace Game.Runtime.Character.Motor
 
             CharacterAnimator.SetFloat(_speedHash, animationSpeed);
             CharacterAnimator.SetBool(_isMovingHash, isMoving);
-        }
-
-        // Backward compatibility
-        public void Move(Vector2 input)
-        {
-            SetMovementInput(input);
-            ExecuteMovement();
         }
 
         public void SetCharacterSettings(CharacterSettings newSettings)

@@ -1,7 +1,8 @@
 using UnityEngine;
 using Game.Runtime.Core.StateMachine;
+using Game.Runtime.Character.Components;
 
-namespace Game.Runtime.Character
+namespace Game.Runtime.Character.Interfaces
 {
     public interface ICharacterController
     {
@@ -9,6 +10,7 @@ namespace Game.Runtime.Character
         Animator Animator { get; }
         Vector2 MovementInput { get; }
         CharacterType CharacterType { get; }
+        ICarryingController CarryingController { get; } 
         bool ChangeState<T>() where T : BaseState<ICharacterController>;
         void SetMovementInput(Vector2 input);
     }
