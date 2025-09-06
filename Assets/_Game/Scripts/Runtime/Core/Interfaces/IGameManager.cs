@@ -1,6 +1,6 @@
 using System;
 
-namespace Game.Runtime.Game
+namespace Game.Runtime.Core.Interfaces
 {
     public enum GameState
     {

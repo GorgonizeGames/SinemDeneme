@@ -2,11 +2,11 @@ using UnityEngine;
 using Game.Runtime.Core.DI;
 using Game.Runtime.Core.Extensions;
 using Game.Runtime.Core.StateMachine;
-using Game.Runtime.Game;
 using Game.Runtime.Character.Motor;
 using Game.Runtime.Character.States;
 using Game.Runtime.Character.Components;
 using Game.Runtime.Character.Interfaces;
+using Game.Runtime.Core.Interfaces;
 
 namespace Game.Runtime.Character
 {

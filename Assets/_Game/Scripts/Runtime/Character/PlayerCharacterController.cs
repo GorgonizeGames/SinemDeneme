@@ -1,8 +1,7 @@
 using UnityEngine;
 using Game.Runtime.Core.DI;
-using Game.Runtime.Input;
+using Game.Runtime.Core.Interfaces;
 using Game.Runtime.Game;
-using Game.Runtime.Input.Interfaces;
 
 namespace Game.Runtime.Character
 {

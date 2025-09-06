@@ -1,5 +1,5 @@
-using Game.Runtime.Input.Interfaces;
 using UnityEngine;
+using Game.Runtime.Core.Interfaces;
 
 namespace Game.Runtime.Input
 {
@@ -9,14 +9,27 @@ namespace Game.Runtime.Input
 
         private bool _isInputEnabled = true;
 
-        public Vector2 MovementInput => _isInputEnabled ? 
-            new Vector2(joystick.Horizontal, joystick.Vertical) : Vector2.zero;
+        public Vector2 MovementInput
+        {
+            get
+            {
+                if (!_isInputEnabled || joystick == null)
+                    return Vector2.zero;
+
+                return new Vector2(joystick.Horizontal, joystick.Vertical);
+            }
+        }
 
         void Awake()
         {
+            ValidateComponents();
+        }
+
+        private void ValidateComponents()
+        {
             if (joystick == null)
             {
-                Debug.LogError("Joystick referansı atanmamış!", this);
+                Debug.LogError($"[{gameObject.name}] Joystick reference is not assigned!", this);
                 _isInputEnabled = false;
             }
         }
@@ -24,9 +37,10 @@ namespace Game.Runtime.Input
         public void EnableInput(bool enabled)
         {
             _isInputEnabled = enabled;
-            if (!enabled && joystick.isActiveAndEnabled)
+
+            if (!enabled && joystick != null && joystick.isActiveAndEnabled)
             {
-                joystick.OnPointerUp(null); 
+                joystick.OnPointerUp(null);
             }
         }
     }

@@ -1,8 +1,8 @@
 using UnityEngine;
 using Game.Runtime.Core.DI;
+using Game.Runtime.Core.Interfaces;
 using Game.Runtime.Input;
 using Game.Runtime.Game;
-using Game.Runtime.Input.Interfaces;
 
 namespace Game.Runtime.Bootstrap
 {
@@ -53,7 +53,7 @@ namespace Game.Runtime.Bootstrap
             Dependencies.Container.Register<IGameManager>(gameManager);
 
             _servicesRegistered = true;
-            Debug.Log("🚀 All services registered!");
+            Debug.Log("🚀 All services registered successfully!");
         }
 
         private void StartGame()
@@ -62,6 +62,10 @@ namespace Game.Runtime.Bootstrap
             {
                 gameManager.SetState(GameState.Playing);
                 Debug.Log("🎮 Game started!");
+            }
+            else
+            {
+                Debug.LogError("[GameBootstrap] Cannot start game - GameManager is null!");
             }
         }
     }
