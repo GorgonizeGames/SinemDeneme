@@ -8,12 +8,14 @@ namespace Game.Runtime.Character.AI
         private CustomerState currentState = CustomerState.Entering;
         private Queue<Vector3> shoppingTargets = new Queue<Vector3>();
         private float stateTimer = 0f;
-        private float shoppingTime = 5f; // Time spent shopping
+        private float shoppingTime = 5f;
 
         public CustomerBehavior(AICharacterController aiController) : base(aiController) { }
 
         public override void UpdateBehavior()
         {
+            if (!IsActive) return;
+
             stateTimer += Time.deltaTime;
 
             switch (currentState)
@@ -41,7 +43,6 @@ namespace Game.Runtime.Character.AI
 
         private void HandleEntering()
         {
-            // Find random shopping spots
             GenerateShoppingTargets();
             currentState = CustomerState.Shopping;
             stateTimer = 0f;
@@ -49,6 +50,8 @@ namespace Game.Runtime.Character.AI
 
         private void HandleShopping()
         {
+            if (controller == null) return;
+
             if (shoppingTargets.Count > 0 && controller.HasReachedDestination)
             {
                 Vector3 nextTarget = shoppingTargets.Dequeue();
@@ -63,15 +66,13 @@ namespace Game.Runtime.Character.AI
 
         private void HandleGoingToQueue()
         {
-            // Find queue position
             Vector3 queuePosition = FindQueuePosition();
-            controller.MoveTo(queuePosition);
+            controller?.MoveTo(queuePosition);
             currentState = CustomerState.InQueue;
         }
 
         private void HandleInQueue()
         {
-            // Wait in queue logic
             if (IsMyTurnToPay())
             {
                 currentState = CustomerState.Paying;
@@ -81,7 +82,7 @@ namespace Game.Runtime.Character.AI
 
         private void HandlePaying()
         {
-            if (stateTimer > 3f) // Payment duration
+            if (stateTimer > 3f)
             {
                 currentState = CustomerState.Leaving;
             }
@@ -89,21 +90,27 @@ namespace Game.Runtime.Character.AI
 
         private void HandleLeaving()
         {
+            if (controller == null) return;
+
             Vector3 exitPoint = FindExitPoint();
             controller.MoveTo(exitPoint);
-            
-            // Customer completed their journey
+
             if (controller.HasReachedDestination)
             {
-                // Destroy or return to pool
+                // Clean up before destroy
+                OnBehaviorEnd();
                 Object.Destroy(controller.gameObject);
             }
         }
 
+        public override void OnBehaviorEnd()
+        {
+            base.OnBehaviorEnd();
+            shoppingTargets.Clear();
+        }
+
         private void GenerateShoppingTargets()
         {
-            // TODO: Get shopping points from store manager
-            // For now, generate random points
             for (int i = 0; i < Random.Range(2, 5); i++)
             {
                 Vector3 randomPoint = GetRandomShoppingPoint();
@@ -114,25 +121,25 @@ namespace Game.Runtime.Character.AI
         private Vector3 GetRandomShoppingPoint()
         {
             // TODO: Get from store layout system
-            return Vector3.zero; // Placeholder
+            return Vector3.zero;
         }
 
         private Vector3 FindQueuePosition()
         {
             // TODO: Get from queue management system
-            return Vector3.zero; // Placeholder
+            return Vector3.zero;
         }
 
         private bool IsMyTurnToPay()
         {
             // TODO: Check with queue system
-            return stateTimer > 10f; // Placeholder
+            return stateTimer > 10f;
         }
 
         private Vector3 FindExitPoint()
         {
             // TODO: Get from store layout
-            return Vector3.zero; // Placeholder
+            return Vector3.zero;
         }
     }
 

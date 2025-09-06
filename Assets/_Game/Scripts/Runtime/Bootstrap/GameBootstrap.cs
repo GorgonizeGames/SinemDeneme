@@ -2,6 +2,7 @@ using UnityEngine;
 using Game.Runtime.Core.DI;
 using Game.Runtime.Input;
 using Game.Runtime.Game;
+using Game.Runtime.Input.Interfaces;
 
 namespace Game.Runtime.Bootstrap
 {
@@ -11,28 +12,57 @@ namespace Game.Runtime.Bootstrap
         [SerializeField] private JoystickInput inputService;
         [SerializeField] private GameManager gameManager;
 
+        private bool _servicesRegistered = false;
+
         void Awake()
         {
+            ValidateReferences();
             RegisterAllServices();
         }
 
         void Start()
         {
-            StartGame();
+            if (_servicesRegistered)
+            {
+                StartGame();
+            }
+        }
+
+        private void ValidateReferences()
+        {
+            if (inputService == null)
+            {
+                Debug.LogError("[GameBootstrap] Input Service is not assigned!", this);
+            }
+
+            if (gameManager == null)
+            {
+                Debug.LogError("[GameBootstrap] Game Manager is not assigned!", this);
+            }
         }
 
         private void RegisterAllServices()
         {
+            if (inputService == null || gameManager == null)
+            {
+                Debug.LogError("[GameBootstrap] Cannot register services - missing references!");
+                return;
+            }
+
             Dependencies.Container.Register<IInputService>(inputService);
             Dependencies.Container.Register<IGameManager>(gameManager);
 
+            _servicesRegistered = true;
             Debug.Log("🚀 All services registered!");
         }
-        
-         private void StartGame()
+
+        private void StartGame()
         {
-            gameManager.SetState(GameState.Playing);
-            Debug.Log("🎮 Game started!");
+            if (gameManager != null)
+            {
+                gameManager.SetState(GameState.Playing);
+                Debug.Log("🎮 Game started!");
+            }
         }
     }
 }

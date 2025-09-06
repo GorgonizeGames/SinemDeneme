@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using Game.Runtime.Items.Interfaces;
 using Game.Runtime.Character.Interfaces;
+using Game.Runtime.Character.AI.Factory;
 
 namespace Game.Runtime.Character.AI
 {
@@ -35,15 +36,24 @@ namespace Game.Runtime.Character.AI
         // Public properties
         public NavMeshAgent NavAgent => navMeshAgent;
         public AIRole Role => aiRole;
-        public bool IsMoving => navMeshAgent.velocity.magnitude > 0.1f;
-        public bool HasReachedDestination => !navMeshAgent.pathPending && navMeshAgent.remainingDistance < stoppingDistance;
+        public bool IsMoving => navMeshAgent != null && navMeshAgent.velocity.magnitude > 0.1f;
+        public bool HasReachedDestination => navMeshAgent != null && !navMeshAgent.pathPending && navMeshAgent.remainingDistance < stoppingDistance;
+
+        protected override void Awake()
+        {
+            base.Awake();
+
+            if (navMeshAgent == null)
+                navMeshAgent = GetComponent<NavMeshAgent>();
+
+            SetupNavMeshAgent();
+        }
 
         protected override void OnInitialize()
         {
-            SetupNavMeshAgent();
             SetupAIBehavior();
             SyncCharacterType();
-            
+
             if (enableDebugLogs)
                 Debug.Log($"🤖 AI Character initialized - Role: {aiRole}, Type: {characterType}");
         }
@@ -66,8 +76,7 @@ namespace Game.Runtime.Character.AI
 
         protected virtual void SetupNavMeshAgent()
         {
-            if (navMeshAgent == null)
-                navMeshAgent = GetComponent<NavMeshAgent>();
+            if (navMeshAgent == null) return;
 
             navMeshAgent.stoppingDistance = stoppingDistance;
             navMeshAgent.updateRotation = false;
@@ -86,13 +95,13 @@ namespace Game.Runtime.Character.AI
             if (Time.time - _lastDecisionTime >= decisionInterval)
             {
                 _currentBehavior?.UpdateBehavior();
-                
+
                 // AI pickup logic
                 if (enableSmartPickup)
                 {
                     HandleAIPickupLogic();
                 }
-                
+
                 _lastDecisionTime = Time.time;
             }
 
@@ -100,34 +109,46 @@ namespace Game.Runtime.Character.AI
             UpdateMovementFromNavMesh();
         }
 
+        protected override void FixedUpdate()
+        {
+            base.FixedUpdate();
+
+            // Sync NavMesh position in FixedUpdate for physics consistency
+            if (navMeshAgent != null && !navMeshAgent.updatePosition)
+            {
+                navMeshAgent.nextPosition = transform.position;
+            }
+        }
+
         protected virtual void HandleAIPickupLogic()
         {
             // Only employees should actively pickup items for now
             if (aiRole != AIRole.Employee) return;
+            if (_carryingController == null || _triggerDetector == null) return;
 
             if (!_carryingController.IsCarrying && _targetItem == null)
             {
-                // Look for items to pickup using trigger detector
                 FindNearbyItems();
             }
             else if (_carryingController.IsCarrying && _targetDropZone == null)
             {
-                // Look for drop zones using trigger detector
                 FindNearbyDropZones();
             }
         }
 
         private void FindNearbyItems()
         {
+            if (_triggerDetector == null) return;
+
             var nearbyItems = _triggerDetector.NearbyItems;
-            
+
             foreach (var item in nearbyItems)
             {
                 if (_carryingController.CanPickupItem(item))
                 {
                     _targetItem = item;
                     MoveTo(item.Transform.position);
-                    
+
                     if (enableDebugLogs)
                         Debug.Log($"🤖 AI found target item: {item.ItemId}");
                     break;
@@ -137,13 +158,15 @@ namespace Game.Runtime.Character.AI
 
         private void FindNearbyDropZones()
         {
+            if (_triggerDetector == null) return;
+
             var nearbyDropZones = _triggerDetector.NearbyDropZones;
-            
+
             foreach (var dropZone in nearbyDropZones)
             {
                 _targetDropZone = dropZone.transform;
                 MoveTo(dropZone.transform.position);
-                
+
                 if (enableDebugLogs)
                     Debug.Log($"🤖 AI found target drop zone: {dropZone.ZoneId}");
                 break;
@@ -152,28 +175,25 @@ namespace Game.Runtime.Character.AI
 
         protected virtual void UpdateMovementFromNavMesh()
         {
+            if (navMeshAgent == null) return;
+
             if (navMeshAgent.hasPath && navMeshAgent.velocity.magnitude > 0.1f)
             {
                 Vector3 velocity = navMeshAgent.desiredVelocity.normalized;
                 Vector2 movementInput = new Vector2(velocity.x, velocity.z);
                 SetMovementInput(movementInput);
-
-                if (!navMeshAgent.updatePosition)
-                {
-                    navMeshAgent.nextPosition = transform.position;
-                }
             }
             else
             {
                 SetMovementInput(Vector2.zero);
-                
-                // Check if we reached target item or drop zone
                 CheckTargetReached();
             }
         }
 
         private void CheckTargetReached()
         {
+            if (_carryingController == null) return;
+
             // Check if we reached target item
             if (_targetItem != null && !_carryingController.IsCarrying)
             {
@@ -181,10 +201,9 @@ namespace Game.Runtime.Character.AI
                 if (distance <= stoppingDistance)
                 {
                     bool success = _carryingController.TryPickupItem(_targetItem);
-                    if (success)
+                    if (success && enableDebugLogs)
                     {
-                        if (enableDebugLogs)
-                            Debug.Log($"🤖 AI picked up item: {_targetItem.ItemId}");
+                        Debug.Log($"🤖 AI picked up item: {_targetItem.ItemId}");
                     }
                     _targetItem = null;
                 }
@@ -196,7 +215,6 @@ namespace Game.Runtime.Character.AI
                 float distance = Vector3.Distance(transform.position, _targetDropZone.position);
                 if (distance <= stoppingDistance)
                 {
-                    // Drop zones handle auto-drop, just clear target
                     _targetDropZone = null;
                 }
             }
@@ -204,15 +222,17 @@ namespace Game.Runtime.Character.AI
 
         public virtual bool MoveTo(Vector3 destination)
         {
+            if (navMeshAgent == null) return false;
+
             if (IsValidDestination(destination))
             {
                 navMeshAgent.SetDestination(destination);
                 _targetDestination = destination;
                 _isMovingToTarget = true;
-                
+
                 if (enableDebugLogs)
                     Debug.Log($"🎯 {aiRole} moving to: {destination}");
-                
+
                 return true;
             }
             return false;
@@ -220,18 +240,10 @@ namespace Game.Runtime.Character.AI
 
         public virtual void Stop()
         {
-            navMeshAgent.ResetPath();
+            navMeshAgent?.ResetPath();
             _isMovingToTarget = false;
             SetMovementInput(Vector2.zero);
-            
-            if (_motor != null)
-            {
-                _motor.Stop();
-            }
-            else
-            {
-                Debug.LogError("❌ CharacterMotor is null in AICharacterController!", this);
-            }
+            _motor?.Stop();
         }
 
         public virtual void SetRole(AIRole newRole)
@@ -248,6 +260,12 @@ namespace Game.Runtime.Character.AI
         {
             NavMeshHit hit;
             return NavMesh.SamplePosition(destination, out hit, navMeshSampleDistance, NavMesh.AllAreas);
+        }
+
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+            _currentBehavior?.OnBehaviorEnd();
         }
 
         void OnDrawGizmosSelected()

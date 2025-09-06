@@ -1,3 +1,4 @@
+using Game.Runtime.Input.Interfaces;
 using UnityEngine;
 
 namespace Game.Runtime.Input

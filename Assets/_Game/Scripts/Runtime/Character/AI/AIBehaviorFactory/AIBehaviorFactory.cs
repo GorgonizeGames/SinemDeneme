@@ -1,4 +1,4 @@
-namespace Game.Runtime.Character.AI
+namespace Game.Runtime.Character.AI.Factory
 {
     public static class AIBehaviorFactory
     {

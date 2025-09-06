@@ -11,7 +11,8 @@ namespace Game.Runtime.Character.Motor
         private Rigidbody _rigidbody;
         private Vector3 _currentVelocity;
         private Vector3 _movementInput;
-        
+        private CharacterRuntimeSettings _runtimeSettings;
+
         public Animator CharacterAnimator { get; private set; }
         public CharacterSettings Settings => characterSettings;
 
@@ -23,21 +24,31 @@ namespace Game.Runtime.Character.Motor
             _rigidbody = GetComponent<Rigidbody>();
             CharacterAnimator = GetComponent<Animator>();
 
-            _speedHash = Animator.StringToHash("Speed");
-            _isMovingHash = Animator.StringToHash("IsMoving");
-            
+            if (CharacterAnimator != null)
+            {
+                _speedHash = Animator.StringToHash("Speed");
+                _isMovingHash = Animator.StringToHash("IsMoving");
+            }
+
+            if (characterSettings != null)
+            {
+                _runtimeSettings = new CharacterRuntimeSettings(characterSettings);
+            }
+
             ApplyPhysicsSettings();
         }
 
         private void ApplyPhysicsSettings()
         {
+            if (_rigidbody == null) return;
+
             _rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-            
-            if (characterSettings != null)
+
+            if (_runtimeSettings != null)
             {
-                _rigidbody.linearDamping = characterSettings.Drag;
-                
-                if (characterSettings.FreezeYPosition)
+                _rigidbody.linearDamping = _runtimeSettings.Drag;
+
+                if (_runtimeSettings.FreezeYPosition)
                 {
                     _rigidbody.constraints |= RigidbodyConstraints.FreezePositionY;
                 }
@@ -51,14 +62,14 @@ namespace Game.Runtime.Character.Motor
 
         public void ExecuteMovement()
         {
-            if (characterSettings == null) return;
+            if (_runtimeSettings == null) return;
 
-            Vector3 targetVelocity = _movementInput * characterSettings.EffectiveMoveSpeed;
+            Vector3 targetVelocity = _movementInput * _runtimeSettings.EffectiveMoveSpeed;
 
             _currentVelocity = Vector3.Lerp(
                 _currentVelocity,
                 targetVelocity,
-                characterSettings.Acceleration * Time.fixedDeltaTime
+                _runtimeSettings.Acceleration * Time.fixedDeltaTime
             );
 
             Vector3 newPosition = _rigidbody.position + _currentVelocity * Time.fixedDeltaTime;
@@ -77,25 +88,25 @@ namespace Game.Runtime.Character.Motor
 
         private void UpdateRotation(Vector3 direction)
         {
-            if (characterSettings == null || direction.magnitude <= 0.1f) return;
+            if (_runtimeSettings == null || direction.magnitude <= 0.1f) return;
 
             Quaternion targetRotation = Quaternion.LookRotation(direction);
             Quaternion newRotation = Quaternion.Slerp(
-                _rigidbody.rotation, 
-                targetRotation, 
-                characterSettings.RotationSpeed * Time.fixedDeltaTime
+                _rigidbody.rotation,
+                targetRotation,
+                _runtimeSettings.RotationSpeed * Time.fixedDeltaTime
             );
             _rigidbody.MoveRotation(newRotation);
         }
 
         private void UpdateAnimation(float moveMagnitude)
         {
-            if (CharacterAnimator == null || characterSettings == null) return;
-            
-            float normalizedSpeed = _currentVelocity.magnitude / characterSettings.EffectiveMoveSpeed;
+            if (CharacterAnimator == null || _runtimeSettings == null) return;
+
+            float normalizedSpeed = _currentVelocity.magnitude / _runtimeSettings.EffectiveMoveSpeed;
             bool isMoving = normalizedSpeed > 0.1f;
 
-            float animationSpeed = normalizedSpeed * characterSettings.AnimationSpeedMultiplier;
+            float animationSpeed = normalizedSpeed * _runtimeSettings.AnimationSpeedMultiplier;
 
             CharacterAnimator.SetFloat(_speedHash, animationSpeed);
             CharacterAnimator.SetBool(_isMovingHash, isMoving);
@@ -104,17 +115,25 @@ namespace Game.Runtime.Character.Motor
         public void SetCharacterSettings(CharacterSettings newSettings)
         {
             characterSettings = newSettings;
+            if (_runtimeSettings != null)
+            {
+                _runtimeSettings.ChangeBaseSettings(newSettings);
+            }
+            else
+            {
+                _runtimeSettings = new CharacterRuntimeSettings(newSettings);
+            }
             ApplyPhysicsSettings();
         }
 
         public void ApplySpeedBoost(float multiplier, float duration)
         {
-            characterSettings?.ApplySpeedBoost(multiplier, duration);
+            _runtimeSettings?.ApplySpeedBoost(multiplier, duration);
         }
 
         public void ResetSpeedBoost()
         {
-            characterSettings?.ResetSpeedBoost();
+            _runtimeSettings?.ResetSpeedBoost();
         }
 
         // Public properties for states

@@ -9,6 +9,8 @@ namespace Game.Runtime.Core.StateMachine
         private IState<T> _currentState;
         private readonly Dictionary<Type, IState<T>> _states = new Dictionary<Type, IState<T>>();
 
+        public IState<T> CurrentState => _currentState;
+
         public StateMachine(T owner)
         {
             _owner = owner;
@@ -31,12 +33,23 @@ namespace Game.Runtime.Core.StateMachine
 
         public bool ChangeState<TState>() where TState : IState<T>
         {
-            if (!_states.ContainsKey(typeof(TState))) return false;
+            if (!_states.ContainsKey(typeof(TState)))
+            {
+                UnityEngine.Debug.LogWarning($"State {typeof(TState).Name} not found in state machine");
+                return false;
+            }
 
             _currentState?.OnExit(_owner);
             _currentState = _states[typeof(TState)];
             _currentState.OnEnter(_owner);
             return true;
+        }
+
+        public void Cleanup()
+        {
+            _currentState?.OnExit(_owner);
+            _currentState = null;
+            _states.Clear();
         }
     }
 

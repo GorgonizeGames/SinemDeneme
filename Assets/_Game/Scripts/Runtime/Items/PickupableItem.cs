@@ -1,6 +1,6 @@
 using UnityEngine;
 using Game.Runtime.Items.Interfaces;
-using Game.Runtime.Character.Interfaces;
+using Game.Runtime.Core.Interfaces;
 
 namespace Game.Runtime.Items
 {
@@ -28,23 +28,21 @@ namespace Game.Runtime.Items
             _rigidbody = GetComponent<Rigidbody>();
         }
 
-        public void OnPickedUp(ICarryingController carrier)
+        public void OnPickedUp(ICarrier carrier)
         {
             _isBeingCarried = true;
             canBePickedUp = false;
-            
-            // Disable physics while carrying
+
             if (_rigidbody != null)
             {
                 _rigidbody.isKinematic = true;
             }
-            
-            // Play pickup effect
+
             if (pickupEffect != null)
             {
                 pickupEffect.Play();
             }
-            
+
             Debug.Log($"📦 Item '{itemId}' picked up");
         }
 
@@ -52,17 +50,15 @@ namespace Game.Runtime.Items
         {
             _isBeingCarried = false;
             canBePickedUp = true;
-            
-            // Detach from parent
+
             transform.SetParent(null);
             transform.position = dropPosition;
-            
-            // Re-enable physics
+
             if (_rigidbody != null)
             {
                 _rigidbody.isKinematic = false;
             }
-            
+
             Debug.Log($"📦 Item '{itemId}' dropped at {dropPosition}");
         }
 
@@ -74,6 +70,14 @@ namespace Game.Runtime.Items
         public Vector3 GetCarryRotation()
         {
             return carryRotation;
+        }
+
+        void OnDestroy()
+        {
+            if (_isBeingCarried && transform.parent != null)
+            {
+                transform.SetParent(null);
+            }
         }
     }
 }

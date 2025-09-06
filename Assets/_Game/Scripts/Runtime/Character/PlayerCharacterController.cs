@@ -1,9 +1,8 @@
-// Assets/_Game/Scripts/Runtime/Character/PlayerCharacterController.cs (Simplified)
 using UnityEngine;
 using Game.Runtime.Core.DI;
 using Game.Runtime.Input;
-using Game.Runtime.Core.Extensions;
 using Game.Runtime.Game;
+using Game.Runtime.Input.Interfaces;
 
 namespace Game.Runtime.Character
 {
@@ -16,11 +15,11 @@ namespace Game.Runtime.Character
 
         protected override void OnInitialize()
         {
-            this.InjectDependencies();
-            
+            // Dependency injection BaseCharacterController'da yapıldı, tekrar yapma!
+
             if (_inputService == null)
             {
-                Debug.LogError("❌ Player needs IInputService!", this);
+                Debug.LogError($"[{gameObject.name}] Player needs IInputService!", this);
                 enabled = false;
                 return;
             }
@@ -32,20 +31,19 @@ namespace Game.Runtime.Character
         {
             if (_inputService == null) return;
 
-            // Sadece joystick movement input
             Vector2 input = _inputService.MovementInput;
             SetMovementInput(input);
 
             if (enableInputDebug && input.magnitude > 0.1f)
             {
-                Debug.Log($"🎮 Player Input: {input} | Speed: {Settings?.MoveSpeed ?? 0} | Carrying: {_carryingController.IsCarrying}");
+                Debug.Log($"🎮 Player Input: {input} | Speed: {Settings?.MoveSpeed ?? 0} | Carrying: {_carryingController?.IsCarrying ?? false}");
             }
         }
 
         protected override void HandleGameStateChange(GameState newState)
         {
             base.HandleGameStateChange(newState);
-            
+
             bool isInputEnabled = (newState == GameState.Playing);
             _inputService?.EnableInput(isInputEnabled);
         }
