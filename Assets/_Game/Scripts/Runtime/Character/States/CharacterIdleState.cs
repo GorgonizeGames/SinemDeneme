@@ -1,6 +1,6 @@
 using UnityEngine;
 using Game.Runtime.Core.StateMachine;
-using Game.Runtime.Character.Motor; // Bu satırı ekleyin
+using Game.Runtime.Character.Motor;
 
 namespace Game.Runtime.Character.States
 {
@@ -8,23 +8,35 @@ namespace Game.Runtime.Character.States
     {
         private CharacterMotor _motor;
 
-        // OnEnter metodu, bu duruma girildiği anda bir kere çalışır.
         public override void OnEnter(ICharacterController owner)
         {
-            // Motor component'ine referansı al
             if (_motor == null)
                 _motor = owner.Transform.GetComponent<CharacterMotor>();
             
-            // Motora hareketin sıfır olduğunu söyleyerek animasyonu güncellemesini sağla
-            _motor.Move(Vector2.zero);
+            // ✅ State'e girerken dur
+            _motor.Stop();
+            
+            Debug.Log("💤 Character entered IDLE state");
         }
 
         public override void OnUpdate(ICharacterController owner)
         {
+            // ✅ Input kontrolü - hareket varsa Moving state'e geç
             if (owner.MovementInput.magnitude > 0.1f)
             {
                 owner.ChangeState<CharacterMovingState>();
             }
+        }
+
+        public override void OnFixedUpdate(ICharacterController owner)
+        {
+            // ✅ Idle state'te fiziksel hareket YOK
+            // Motor sadece animasyonu güncelliyor
+        }
+
+        public override void OnExit(ICharacterController owner)
+        {
+            Debug.Log("🏃 Character exiting IDLE state");
         }
     }
 }

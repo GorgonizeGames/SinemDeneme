@@ -13,6 +13,7 @@ namespace Game.Runtime.Character.Motor
         private Vector3 _movementInput;
         
         public Animator CharacterAnimator { get; private set; }
+        public CharacterSettings Settings => characterSettings;
 
         private int _speedHash;
         private int _isMovingHash;
@@ -34,7 +35,7 @@ namespace Game.Runtime.Character.Motor
             
             if (characterSettings != null)
             {
-                _rigidbody.linearDamping= characterSettings.Drag;
+                _rigidbody.linearDamping = characterSettings.Drag;
                 
                 if (characterSettings.FreezeYPosition)
                 {
@@ -43,31 +44,38 @@ namespace Game.Runtime.Character.Motor
             }
         }
 
-        public void Move(Vector2 input)
+        // ✅ Sadece input'u kaydet, hareket etme
+        public void SetMovementInput(Vector2 input)
         {
             _movementInput = new Vector3(input.x, 0, input.y);
         }
 
-        void FixedUpdate()
+        // ✅ State'ler tarafından çağrılacak - fiziksel hareket
+        public void ExecuteMovement()
         {
             if (characterSettings == null) return;
 
-            // Hedef hızı ScriptableObject'ten al
             Vector3 targetVelocity = _movementInput * characterSettings.EffectiveMoveSpeed;
 
-            // Hızı ivmelenme ile yumuşat
             _currentVelocity = Vector3.Lerp(
                 _currentVelocity,
                 targetVelocity,
                 characterSettings.Acceleration * Time.fixedDeltaTime
             );
 
-            // Yeni pozisyonu hesapla ve MovePosition ile uygula
             Vector3 newPosition = _rigidbody.position + _currentVelocity * Time.fixedDeltaTime;
             _rigidbody.MovePosition(newPosition);
 
             UpdateRotation(_movementInput);
             UpdateAnimation(_movementInput.magnitude);
+        }
+
+        // ✅ Durma komutu - state'ler için
+        public void Stop()
+        {
+            _movementInput = Vector3.zero;
+            _currentVelocity = Vector3.zero;
+            UpdateAnimation(0f);
         }
 
         private void UpdateRotation(Vector3 direction)
@@ -90,26 +98,27 @@ namespace Game.Runtime.Character.Motor
             float normalizedSpeed = _currentVelocity.magnitude / characterSettings.EffectiveMoveSpeed;
             bool isMoving = normalizedSpeed > 0.1f;
 
-            // Animation speed multiplier'ı uygula
             float animationSpeed = normalizedSpeed * characterSettings.AnimationSpeedMultiplier;
 
             CharacterAnimator.SetFloat(_speedHash, animationSpeed);
             CharacterAnimator.SetBool(_isMovingHash, isMoving);
         }
 
-        // Public methods for external use
+        // Backward compatibility için eski Move metodu
+        public void Move(Vector2 input)
+        {
+            SetMovementInput(input);
+            ExecuteMovement();
+        }
+
+        // Runtime settings change
         public void SetCharacterSettings(CharacterSettings newSettings)
         {
             characterSettings = newSettings;
             ApplyPhysicsSettings();
         }
 
-        public CharacterSettings GetCharacterSettings()
-        {
-            return characterSettings;
-        }
-
-        // Power-up metodları
+        // Power-up support
         public void ApplySpeedBoost(float multiplier, float duration)
         {
             characterSettings?.ApplySpeedBoost(multiplier, duration);
@@ -119,5 +128,9 @@ namespace Game.Runtime.Character.Motor
         {
             characterSettings?.ResetSpeedBoost();
         }
+
+        // Public properties for states
+        public bool IsMoving => _currentVelocity.magnitude > 0.1f;
+        public Vector3 CurrentVelocity => _currentVelocity;
     }
 }

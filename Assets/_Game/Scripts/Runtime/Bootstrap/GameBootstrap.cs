@@ -13,17 +13,26 @@ namespace Game.Runtime.Bootstrap
 
         void Awake()
         {
-            // Servisleri DI Container'a kaydet
-            Dependencies.Container.Register<IInputService>(inputService);
-            Dependencies.Container.Register<IGameManager>(gameManager);
-            
-            Debug.Log("🚀 Game Bootstrap Completed! Services are registered.");
+            RegisterAllServices();
         }
 
         void Start()
         {
-            // Oyunu başlat
+            StartGame();
+        }
+
+        private void RegisterAllServices()
+        {
+            Dependencies.Container.Register<IInputService>(inputService);
+            Dependencies.Container.Register<IGameManager>(gameManager);
+
+            Debug.Log("🚀 All services registered!");
+        }
+        
+         private void StartGame()
+        {
             gameManager.SetState(GameState.Playing);
+            Debug.Log("🎮 Game started!");
         }
     }
 }

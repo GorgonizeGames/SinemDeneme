@@ -10,12 +10,15 @@ namespace Game.Runtime.Character.States
 
         public override void OnEnter(ICharacterController owner)
         {
-            // Motor referansını bir kere al, her kare arama.
-            _motor = owner.Transform.GetComponent<CharacterMotor>();
+            if (_motor == null)
+                _motor = owner.Transform.GetComponent<CharacterMotor>();
+            
+            Debug.Log("🏃 Character entered MOVING state");
         }
 
         public override void OnUpdate(ICharacterController owner)
         {
+            // ✅ Input kontrolü - hareket yoksa Idle state'e geç
             if (owner.MovementInput.magnitude < 0.1f)
             {
                 owner.ChangeState<CharacterIdleState>();
@@ -24,7 +27,14 @@ namespace Game.Runtime.Character.States
 
         public override void OnFixedUpdate(ICharacterController owner)
         {
-            _motor.Move(owner.MovementInput);
+            // ✅ SADECE Moving state'te fiziksel hareket
+            _motor.SetMovementInput(owner.MovementInput);
+            _motor.ExecuteMovement();
+        }
+
+        public override void OnExit(ICharacterController owner)
+        {
+            Debug.Log("💤 Character exiting MOVING state");
         }
     }
 }
