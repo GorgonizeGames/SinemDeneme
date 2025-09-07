@@ -1,4 +1,5 @@
 using UnityEngine;
+using Game.Runtime.Character.Animation;
 
 namespace Game.Runtime.Character.Motor
 {
@@ -16,19 +17,10 @@ namespace Game.Runtime.Character.Motor
         public Animator CharacterAnimator { get; private set; }
         public CharacterSettings Settings => characterSettings;
 
-        private int _speedHash;
-        private int _isMovingHash;
-
         void Awake()
         {
             _rigidbody = GetComponent<Rigidbody>();
             CharacterAnimator = GetComponent<Animator>();
-
-            if (CharacterAnimator != null)
-            {
-                _speedHash = Animator.StringToHash("Speed");
-                _isMovingHash = Animator.StringToHash("IsMoving");
-            }
 
             if (characterSettings != null)
             {
@@ -76,14 +68,14 @@ namespace Game.Runtime.Character.Motor
             _rigidbody.MovePosition(newPosition);
 
             UpdateRotation(_movementInput);
-            UpdateAnimation(_movementInput.magnitude);
+            UpdateAnimation();
         }
 
         public void Stop()
         {
             _movementInput = Vector3.zero;
             _currentVelocity = Vector3.zero;
-            UpdateAnimation(0f);
+            UpdateAnimation();
         }
 
         private void UpdateRotation(Vector3 direction)
@@ -99,17 +91,17 @@ namespace Game.Runtime.Character.Motor
             _rigidbody.MoveRotation(newRotation);
         }
 
-        private void UpdateAnimation(float moveMagnitude)
+        private void UpdateAnimation()
         {
             if (CharacterAnimator == null || _runtimeSettings == null) return;
 
-            float normalizedSpeed = _currentVelocity.magnitude / _runtimeSettings.EffectiveMoveSpeed;
+            float speed = _currentVelocity.magnitude;
+            float normalizedSpeed = speed / _runtimeSettings.EffectiveMoveSpeed;
             bool isMoving = normalizedSpeed > 0.1f;
 
-            float animationSpeed = normalizedSpeed * _runtimeSettings.AnimationSpeedMultiplier;
-
-            CharacterAnimator.SetFloat(_speedHash, animationSpeed);
-            CharacterAnimator.SetBool(_isMovingHash, isMoving);
+            // Base Layer - Sadece yürüme ve idle
+            CharacterAnimator.SetFloat(AnimationParameters.Speed, normalizedSpeed * _runtimeSettings.AnimationSpeedMultiplier);
+            CharacterAnimator.SetBool(AnimationParameters.IsMoving, isMoving);
         }
 
         public void SetCharacterSettings(CharacterSettings newSettings)
@@ -136,7 +128,6 @@ namespace Game.Runtime.Character.Motor
             _runtimeSettings?.ResetSpeedBoost();
         }
 
-        // Public properties for states
         public bool IsMoving => _currentVelocity.magnitude > 0.1f;
         public Vector3 CurrentVelocity => _currentVelocity;
     }

@@ -2,6 +2,7 @@ using UnityEngine;
 using Game.Runtime.Core.StateMachine;
 using Game.Runtime.Character.Motor;
 using Game.Runtime.Character.Interfaces;
+using Game.Runtime.Character.Animation;
 
 namespace Game.Runtime.Character.States
 {
@@ -21,6 +22,12 @@ namespace Game.Runtime.Character.States
                 }
             }
 
+            // AnimationParameters kullanarak güvenli set etme
+            if (owner.Animator != null)
+            {
+                owner.Animator.SetBool(AnimationParameters.IsMoving, true);
+            }
+
             Debug.Log("🏃 Character entered MOVING state");
         }
 
@@ -29,6 +36,13 @@ namespace Game.Runtime.Character.States
             if (_motor != null)
             {
                 _motor.SetMovementInput(owner.MovementInput);
+
+                // Speed parametresini güncelle
+                if (owner.Animator != null)
+                {
+                    float speed = owner.MovementInput.magnitude;
+                    owner.Animator.SetFloat(AnimationParameters.Speed, speed);
+                }
             }
 
             if (owner.MovementInput.magnitude < 0.1f)
