@@ -20,7 +20,7 @@ namespace Game.Runtime.Character.Motor
         void Awake()
         {
             _rigidbody = GetComponent<Rigidbody>();
-            CharacterAnimator = GetComponent<Animator>();
+            CharacterAnimator = GetComponentInChildren<Animator>();
 
             if (characterSettings != null)
             {
