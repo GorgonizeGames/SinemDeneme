@@ -7,15 +7,13 @@ using Game.Runtime.Character.States;
 using Game.Runtime.Character.Components;
 using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Core.Interfaces;
+using Game.Runtime.Character.Data;
 
 namespace Game.Runtime.Character
 {
     [RequireComponent(typeof(CharacterMotor), typeof(CarryingController), typeof(CharacterTriggerDetector))]
     public abstract class BaseCharacterController : MonoBehaviour, ICharacterController
     {
-        [Header("Character Info")]
-        [SerializeField] protected CharacterType characterType;
-
         [Inject] protected IGameManager _gameManager;
 
         protected CharacterMotor _motor;
@@ -29,8 +27,7 @@ namespace Game.Runtime.Character
         public Transform Transform => transform;
         public Animator Animator => _motor?.CharacterAnimator;
         public Vector2 MovementInput => _currentMovementInput;
-        public CharacterType CharacterType => characterType;
-        public CharacterSettings Settings => _motor?.Settings;
+        public CharacterData Data => _motor?.Data;
         public ICarryingController CarryingController => _carryingController;
 
         protected virtual void Awake()
@@ -123,7 +120,7 @@ namespace Game.Runtime.Character
             _motor?.ApplySpeedBoost(multiplier, duration);
         }
 
-        public void ChangeCharacterSettings(CharacterSettings newSettings)
+        public void ChangeCharacterSettings(CharacterData newSettings)
         {
             _motor?.SetCharacterSettings(newSettings);
         }

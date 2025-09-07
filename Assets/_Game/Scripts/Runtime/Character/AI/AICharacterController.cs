@@ -15,7 +15,6 @@ namespace Game.Runtime.Character.AI
         [SerializeField] protected float navMeshSampleDistance = 1f;
 
         [Header("AI Behavior")]
-        [SerializeField] protected AIRole aiRole;
         [SerializeField] protected float decisionInterval = 1f;
         [SerializeField] protected bool enableDebugLogs = false;
 
@@ -35,7 +34,6 @@ namespace Game.Runtime.Character.AI
 
         // Public properties
         public NavMeshAgent NavAgent => navMeshAgent;
-        public AIRole Role => aiRole;
         public bool IsMoving => navMeshAgent != null && navMeshAgent.velocity.magnitude > 0.1f;
         public bool HasReachedDestination => navMeshAgent != null && !navMeshAgent.pathPending && navMeshAgent.remainingDistance < stoppingDistance;
 
@@ -52,27 +50,11 @@ namespace Game.Runtime.Character.AI
         protected override void OnInitialize()
         {
             SetupAIBehavior();
-            SyncCharacterType();
 
             if (enableDebugLogs)
-                Debug.Log($"🤖 AI Character initialized - Role: {aiRole}, Type: {characterType}");
+                Debug.Log($"🤖 AI Character initialized - Role: {Data.CharacterType}, Type: {Data.CharacterType}");
         }
 
-        private void SyncCharacterType()
-        {
-            switch (aiRole)
-            {
-                case AIRole.Customer:
-                    characterType = CharacterType.AI_Customer;
-                    break;
-                case AIRole.Employee:
-                    characterType = CharacterType.AI_Employee;
-                    break;
-                case AIRole.Cashier:
-                    characterType = CharacterType.AI_Cashier;
-                    break;
-            }
-        }
 
         protected virtual void SetupNavMeshAgent()
         {
@@ -85,7 +67,7 @@ namespace Game.Runtime.Character.AI
 
         protected virtual void SetupAIBehavior()
         {
-            _currentBehavior = AIBehaviorFactory.CreateBehavior(aiRole, this);
+            _currentBehavior = AIBehaviorFactory.CreateBehavior(Data.CharacterType, this);
             _currentBehavior?.Initialize();
         }
 
@@ -123,7 +105,7 @@ namespace Game.Runtime.Character.AI
         protected virtual void HandleAIPickupLogic()
         {
             // Only employees should actively pickup items for now
-            if (aiRole != AIRole.Employee) return;
+            if (Data.CharacterType != CharacterType.AI_Employee) return;
             if (_carryingController == null || _triggerDetector == null) return;
 
             if (!_carryingController.IsCarrying && _targetItem == null)
@@ -231,7 +213,7 @@ namespace Game.Runtime.Character.AI
                 _isMovingToTarget = true;
 
                 if (enableDebugLogs)
-                    Debug.Log($"🎯 {aiRole} moving to: {destination}");
+                    Debug.Log($"🎯 {Data.CharacterType} moving to: {destination}");
 
                 return true;
             }
@@ -244,16 +226,6 @@ namespace Game.Runtime.Character.AI
             _isMovingToTarget = false;
             SetMovementInput(Vector2.zero);
             _motor?.Stop();
-        }
-
-        public virtual void SetRole(AIRole newRole)
-        {
-            if (aiRole != newRole)
-            {
-                aiRole = newRole;
-                SyncCharacterType();
-                SetupAIBehavior();
-            }
         }
 
         protected virtual bool IsValidDestination(Vector3 destination)
@@ -290,12 +262,5 @@ namespace Game.Runtime.Character.AI
             Gizmos.color = Color.blue;
             Gizmos.DrawWireSphere(transform.position, pickupRange);
         }
-    }
-
-    public enum AIRole
-    {
-        Customer,
-        Employee,
-        Cashier
     }
 }

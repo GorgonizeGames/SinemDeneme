@@ -2405,7 +2405,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3cc683d93e900634389eaf3c7bad9354, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  characterType: 0
   enableInputDebug: 0
 --- !u!114 &5768416209402822678
 MonoBehaviour:
@@ -2456,7 +2455,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0dff5e23aa8c1ff458bff34333ce827e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  characterSettings: {fileID: 11400000, guid: 5731591e0758fcb42ad57b1c5ac9b8e7, type: 2}
+  data: {fileID: 11400000, guid: 5731591e0758fcb42ad57b1c5ac9b8e7, type: 2}
 --- !u!136 &5768416209402822681
 CapsuleCollider:
   m_ObjectHideFlags: 0

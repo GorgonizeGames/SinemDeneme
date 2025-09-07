@@ -22,7 +22,7 @@ namespace Game.Runtime.Character
                 return;
             }
 
-            Debug.Log($"🎮 Player initialized with settings: {Settings?.name ?? "None"}");
+            Debug.Log($"🎮 Player initialized with settings: {Data.CharacterType}");
         }
 
         protected override void HandleInput()
@@ -34,7 +34,7 @@ namespace Game.Runtime.Character
 
             if (enableInputDebug && input.magnitude > 0.1f)
             {
-                Debug.Log($"🎮 Player Input: {input} | Speed: {Settings?.MoveSpeed ?? 0} | Carrying: {_carryingController?.IsCarrying ?? false}");
+                Debug.Log($"🎮 Player Input: {input} | Speed: {Data?.MoveSpeed ?? 0} | Carrying: {_carryingController?.IsCarrying ?? false}");
             }
         }
 

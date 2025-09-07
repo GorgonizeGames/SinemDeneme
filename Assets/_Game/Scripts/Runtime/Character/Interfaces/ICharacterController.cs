@@ -9,7 +9,6 @@ namespace Game.Runtime.Character.Interfaces
         Transform Transform { get; }
         Animator Animator { get; }
         Vector2 MovementInput { get; }
-        CharacterType CharacterType { get; }
         ICarryingController CarryingController { get; } 
         bool ChangeState<T>() where T : BaseState<ICharacterController>;
         void SetMovementInput(Vector2 input);

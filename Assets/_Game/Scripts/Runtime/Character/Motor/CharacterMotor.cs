@@ -1,5 +1,7 @@
 using UnityEngine;
 using Game.Runtime.Character.Animation;
+using Game.Runtime.Character.Settings;
+using Game.Runtime.Character.Data;
 
 namespace Game.Runtime.Character.Motor
 {
@@ -7,24 +9,24 @@ namespace Game.Runtime.Character.Motor
     public class CharacterMotor : MonoBehaviour
     {
         [Header("Character Settings")]
-        [SerializeField] private CharacterSettings characterSettings;
-
+        [SerializeField] CharacterData data;
         private Rigidbody _rigidbody;
         private Vector3 _currentVelocity;
         private Vector3 _movementInput;
         private CharacterRuntimeSettings _runtimeSettings;
 
-        public Animator CharacterAnimator { get; private set; }
-        public CharacterSettings Settings => characterSettings;
+        public Animator CharacterAnimator { get; private set;}
+
+        public CharacterData Data=> data;
 
         void Awake()
         {
             _rigidbody = GetComponent<Rigidbody>();
             CharacterAnimator = GetComponentInChildren<Animator>();
 
-            if (characterSettings != null)
+            if (data != null)
             {
-                _runtimeSettings = new CharacterRuntimeSettings(characterSettings);
+                _runtimeSettings = new CharacterRuntimeSettings(data);
             }
 
             ApplyPhysicsSettings();
@@ -104,9 +106,9 @@ namespace Game.Runtime.Character.Motor
             CharacterAnimator.SetBool(AnimationParameters.IsMoving, isMoving);
         }
 
-        public void SetCharacterSettings(CharacterSettings newSettings)
+        public void SetCharacterSettings(CharacterData newSettings)
         {
-            characterSettings = newSettings;
+            data = newSettings;
             if (_runtimeSettings != null)
             {
                 _runtimeSettings.ChangeBaseSettings(newSettings);

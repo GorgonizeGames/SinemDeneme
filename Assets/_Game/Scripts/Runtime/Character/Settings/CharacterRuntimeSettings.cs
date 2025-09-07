@@ -1,15 +1,16 @@
+using Game.Runtime.Character.Data;
 using UnityEngine;
 
-namespace Game.Runtime.Character
+namespace Game.Runtime.Character.Settings
 {
     // Runtime state için ayrı class
     public class CharacterRuntimeSettings
     {
-        private CharacterSettings _baseSettings;
+        private CharacterData _baseSettings;
         private float _speedMultiplier = 1f;
         private float _boostEndTime = 0f;
 
-        public CharacterRuntimeSettings(CharacterSettings baseSettings)
+        public CharacterRuntimeSettings(CharacterData baseSettings)
         {
             _baseSettings = baseSettings;
         }
@@ -50,7 +51,7 @@ namespace Game.Runtime.Character
             }
         }
 
-        public void ChangeBaseSettings(CharacterSettings newSettings)
+        public void ChangeBaseSettings(CharacterData newSettings)
         {
             _baseSettings = newSettings;
         }
