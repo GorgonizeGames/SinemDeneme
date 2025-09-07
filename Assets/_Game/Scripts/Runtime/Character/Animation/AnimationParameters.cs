@@ -1,5 +1,3 @@
-using Game.Runtime.Character.Animation;
-using Game.Runtime.Character.Motor;
 using UnityEngine;
 
 namespace Game.Runtime.Character.Animation

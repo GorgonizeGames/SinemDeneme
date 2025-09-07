@@ -1,5 +1,3 @@
-using Game.Runtime.Game;
-using Game.Runtime.Input;
 using UnityEngine;
 
 namespace Game.Runtime.Core.Interfaces

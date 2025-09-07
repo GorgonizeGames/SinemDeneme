@@ -1,7 +1,6 @@
 using UnityEngine;
 using Game.Runtime.Core.DI;
 using Game.Runtime.Core.Interfaces;
-using Game.Runtime.Game;
 
 namespace Game.Runtime.Character
 {
