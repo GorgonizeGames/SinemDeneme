@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using Game.Runtime.Store.Areas;
-using Game.Runtime.Interaction.Interfaces;
+using Game.Runtime.Interactions.Interfaces;
 using Game.Runtime.Items;
 using Game.Runtime.Items.Data;
 using Game.Runtime.Character;
@@ -221,18 +221,16 @@ namespace Game.Runtime.Store.Shelves
 
         private bool IsEmployeeOrPlayer(BaseCharacterController character)
         {
-            // if (character is PlayerCharacterController) return true;
+            if (character is PlayerCharacterController) return true;
 
-            // var aiController = character as AI.AICharacterController;
-            // return aiController != null && aiController.Data.CharacterType == CharacterType.AI_Employee;
-            return true;
+            var aiController = character as Character.AI.AICharacterController;
+            return aiController != null && aiController.Data.CharacterType == Character.Interfaces.CharacterType.AI_Employee;
         }
 
         private bool IsCustomer(BaseCharacterController character)
         {
-            // var aiController = character as AI.AICharacterController;
-            // return aiController != null && aiController.Data.CharacterType == CharacterType.AI_Customer;
-            return true;
+            var aiController = character as Character.AI.AICharacterController;
+            return aiController != null && aiController.Data.CharacterType == Character.Interfaces.CharacterType.AI_Customer;
         }
 
         public Transform GetCustomerBrowsePoint()

@@ -2,17 +2,15 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using Game.Runtime.Store.Areas;
-using Game.Runtime.Interaction.Interfaces;
+using Game.Runtime.Interactions.Interfaces;
 using Game.Runtime.Items;
 using Game.Runtime.Items.Data;
-using Game.Runtime.Character;
 using Game.Runtime.Character.Components;
-using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Core.DI;
 using DG.Tweening;
 using Game.Runtime.Items.Services;
 
-namespace Game.Runtime.Production
+namespace Game.Runtime.Store.Machines
 {
     public class ProductionMachine : PurchasableArea
     {

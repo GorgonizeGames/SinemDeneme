@@ -1,13 +1,4 @@
-using Game.Runtime.Character.Components;
-using Game.Runtime.Core.Interfaces;
-using Game.Runtime.Economy;
-using Game.Runtime.Interaction.Interfaces;
-using Game.Runtime.Items;
-using Game.Runtime.Items.Data;
-using Game.Runtime.Items.Services;
-using Game.Runtime.Store.Areas;
-
-namespace Game.Runtime.Interaction.Interfaces
+namespace Game.Runtime.Interactions.Interfaces
 {
     public interface IInteractable
     {

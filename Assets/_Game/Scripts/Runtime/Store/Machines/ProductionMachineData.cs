@@ -1,11 +1,10 @@
 using UnityEngine;
 using Game.Runtime.Store.Areas;
-using Game.Runtime.Items;
 using Game.Runtime.Items.Data;
 
-namespace Game.Runtime.Production
+namespace Game.Runtime.Store.Machines
 {
-    [CreateAssetMenu(fileName = "MachineData", menuName = "Game/Production/Machine Data")]
+    [CreateAssetMenu(fileName = "MachineData", menuName = "Game/Store/Machine Data")]
     public class ProductionMachineData : PurchasableAreaData
     {
         [Header("Production")]
@@ -20,4 +19,3 @@ namespace Game.Runtime.Production
         public int CapacityIncrease = 5;
     }
 }
-

@@ -1,6 +1,6 @@
 using Game.Runtime.Character;
 
-namespace Game.Runtime.Interaction.Interfaces
+namespace Game.Runtime.Interactions.Interfaces
 {
     public interface IInteractor
     {

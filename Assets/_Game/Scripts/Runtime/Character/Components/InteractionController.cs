@@ -1,6 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
-using Game.Runtime.Interaction.Interfaces;
+using Game.Runtime.Interactions.Interfaces;
 
 namespace Game.Runtime.Character.Components
 {
@@ -18,8 +18,7 @@ namespace Game.Runtime.Character.Components
 
         public BaseCharacterController Character => _character;
         public bool IsInteracting => _activeInteractions.Count > 0;
-
-        public bool CanStartInteraction => throw new System.NotImplementedException();
+        public bool CanStartInteraction => _character != null;
 
         void Awake()
         {

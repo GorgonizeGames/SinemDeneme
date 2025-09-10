@@ -1,7 +1,7 @@
 using UnityEngine;
 using Game.Runtime.Core.DI;
 using Game.Runtime.Core.Interfaces;
-using Game.Runtime.Interaction.Interfaces;
+using Game.Runtime.Interactions.Interfaces;
 using DG.Tweening;
 using Game.Runtime.Character;
 using Game.Runtime.Core.Extensions;

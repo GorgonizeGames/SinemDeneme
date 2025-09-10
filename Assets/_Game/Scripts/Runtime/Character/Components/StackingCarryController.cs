@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Game.Runtime.Items;
 using Game.Runtime.Items.Data;
 using Game.Runtime.Character.Interfaces;
-using Game.Runtime.Core.Interfaces;
 using Game.Runtime.Items.Interfaces;
 
 namespace Game.Runtime.Character.Components

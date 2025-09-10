@@ -21,7 +21,6 @@ namespace Game.Runtime.Character
         protected Vector2 _currentMovementInput;
 
         protected InteractionController _interactionController;
-
         protected StackingCarryController _carryingController;
 
         private bool _isInitialized = false;
