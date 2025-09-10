@@ -106,7 +106,7 @@ namespace Game.Runtime.Character.AI
         {
             // Only employees should actively pickup items for now
             if (Data.CharacterType != CharacterType.AI_Employee) return;
-            if (_carryingController == null || _triggerDetector == null) return;
+            if (_carryingController == null || _interactionController == null) return;
 
             if (!_carryingController.IsCarrying && _targetItem == null)
             {
@@ -120,39 +120,27 @@ namespace Game.Runtime.Character.AI
 
         private void FindNearbyItems()
         {
-            if (_triggerDetector == null) return;
+            if (_interactionController == null) return;
 
-            var nearbyItems = _triggerDetector.NearbyItems;
+            // var nearbyItems = _interactionController.NearbyItems;
 
-            foreach (var item in nearbyItems)
-            {
-                if (_carryingController.CanPickupItem(item))
-                {
-                    _targetItem = item;
-                    MoveTo(item.Transform.position);
+            // foreach (var item in nearbyItems)
+            // {
+            //     if (_carryingController.CanPickupItem(item))
+            //     {
+            //         _targetItem = item;
+            //         MoveTo(item.Transform.position);
 
-                    if (enableDebugLogs)
-                        Debug.Log($"🤖 AI found target item: {item.ItemId}");
-                    break;
-                }
-            }
+            //         if (enableDebugLogs)
+            //             Debug.Log($"🤖 AI found target item: {item.ItemId}");
+            //         break;
+            //     }
+            // }
         }
 
         private void FindNearbyDropZones()
         {
-            if (_triggerDetector == null) return;
-
-            var nearbyDropZones = _triggerDetector.NearbyDropZones;
-
-            foreach (var dropZone in nearbyDropZones)
-            {
-                _targetDropZone = dropZone.transform;
-                MoveTo(dropZone.transform.position);
-
-                if (enableDebugLogs)
-                    Debug.Log($"🤖 AI found target drop zone: {dropZone.ZoneId}");
-                break;
-            }
+           
         }
 
         protected virtual void UpdateMovementFromNavMesh()

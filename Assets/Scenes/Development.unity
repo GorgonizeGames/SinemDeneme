@@ -507,8 +507,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7fe5031e502f71e48b9bd3ff1bb10cd4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  inputService: {fileID: 2062820327}
   gameManager: {fileID: 1006173496}
+  inputService: {fileID: 2062820327}
+  economyService: {fileID: 664782404}
+  itemPoolService: {fileID: 1207976942}
 --- !u!1 &538587521
 GameObject:
   m_ObjectHideFlags: 0
@@ -684,6 +686,51 @@ Transform:
   m_Children: []
   m_Father: {fileID: 153928386}
   m_LocalEulerAnglesHint: {x: 124.33, y: 405.552, z: 565.893}
+--- !u!1 &664782402
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 664782403}
+  - component: {fileID: 664782404}
+  m_Layer: 0
+  m_Name: Economy
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &664782403
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 664782402}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2018210419}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &664782404
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 664782402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 471dbaeb710d6aa45820a48c585a8776, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  startingMoney: 100
 --- !u!1 &897577767
 GameObject:
   m_ObjectHideFlags: 0
@@ -791,6 +838,52 @@ Transform:
   - {fileID: 4122325960245078496}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1207976940
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1207976941}
+  - component: {fileID: 1207976942}
+  m_Layer: 0
+  m_Name: ItemPool
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1207976941
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1207976940}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2018210419}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1207976942
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1207976940}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c9bc09c1bbda9e4eb47af28e6ceaac0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  poolConfigs: []
+  poolContainer: {fileID: 0}
 --- !u!1 &1437910366
 GameObject:
   m_ObjectHideFlags: 0
@@ -1273,6 +1366,8 @@ Transform:
   m_Children:
   - {fileID: 525414490}
   - {fileID: 1006173495}
+  - {fileID: 1207976941}
+  - {fileID: 664782403}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2062820322 stripped
@@ -2383,9 +2478,9 @@ GameObject:
   - component: {fileID: 5768416209402822682}
   - component: {fileID: 5768416209402822681}
   - component: {fileID: 5768416209402822680}
-  - component: {fileID: 5768416209402822679}
-  - component: {fileID: 5768416209402822678}
   - component: {fileID: 5768416209402822677}
+  - component: {fileID: 5768416209402822684}
+  - component: {fileID: 5768416209402822683}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2406,43 +2501,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   enableInputDebug: 0
---- !u!114 &5768416209402822678
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5768416209402822676}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 98bd308050de2c740a3af0d724a6516b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  itemLayerMask:
-    serializedVersion: 2
-    m_Bits: 1
-  zoneLayerMask:
-    serializedVersion: 2
-    m_Bits: 1
-  enableDebugLogs: 0
---- !u!114 &5768416209402822679
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5768416209402822676}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c12c797bd0eafd34aa0b9784191d9f76, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  carryPoint: {fileID: 1437910367}
-  pickupLayerMask:
-    serializedVersion: 2
-    m_Bits: 1
-  pickupRange: 1.5
-  enableDebugLogs: 0
 --- !u!114 &5768416209402822680
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2506,6 +2564,37 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &5768416209402822683
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5768416209402822676}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5beec7d4702b3784f9cb24ca1e780c57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  stackPoint: {fileID: 2794483367178465067}
+  maxStackSize: 10
+  stackHeight: 0.1
+--- !u!114 &5768416209402822684
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5768416209402822676}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1596ff4a56627634a8ac9ba9db08fe02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  interactableLayer:
+    serializedVersion: 2
+    m_Bits: 0
+  interactionInterval: 0.5
 --- !u!4 &5785699526595421270
 Transform:
   m_ObjectHideFlags: 0

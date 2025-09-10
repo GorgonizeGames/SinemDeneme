@@ -11,16 +11,18 @@ using Game.Runtime.Character.Data;
 
 namespace Game.Runtime.Character
 {
-    [RequireComponent(typeof(CharacterMotor), typeof(CarryingController), typeof(CharacterTriggerDetector))]
+    [RequireComponent(typeof(CharacterMotor), typeof(StackingCarryController), typeof(InteractionController))]
     public abstract class BaseCharacterController : MonoBehaviour, ICharacterController
     {
         [Inject] protected IGameManager _gameManager;
 
         protected CharacterMotor _motor;
-        protected CarryingController _carryingController;
-        protected CharacterTriggerDetector _triggerDetector;
         protected StateMachine<ICharacterController> _stateMachine;
         protected Vector2 _currentMovementInput;
+
+        protected InteractionController _interactionController;
+
+        protected StackingCarryController _carryingController;
 
         private bool _isInitialized = false;
 
@@ -34,8 +36,8 @@ namespace Game.Runtime.Character
         {
             // Get components early
             _motor = GetComponent<CharacterMotor>();
-            _carryingController = GetComponent<CarryingController>();
-            _triggerDetector = GetComponent<CharacterTriggerDetector>();
+            _carryingController = GetComponent<StackingCarryController>();
+            _interactionController = GetComponent<InteractionController>();
 
             ValidateComponents();
         }
@@ -66,8 +68,8 @@ namespace Game.Runtime.Character
                 Debug.LogError($"[{gameObject.name}] CharacterMotor component is missing!", this);
             if (_carryingController == null)
                 Debug.LogError($"[{gameObject.name}] CarryingController component is missing!", this);
-            if (_triggerDetector == null)
-                Debug.LogError($"[{gameObject.name}] CharacterTriggerDetector component is missing!", this);
+            if (_interactionController == null)
+                Debug.LogError($"[{gameObject.name}] InteractionController component is missing!", this);
         }
 
         protected virtual void SetupStateMachine()
