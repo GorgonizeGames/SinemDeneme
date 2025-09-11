@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using DG.Tweening;
 using Game.Runtime.Store.Areas;
 using Game.Runtime.Interactions.Interfaces;
 using Game.Runtime.Items;
@@ -8,9 +9,10 @@ using Game.Runtime.Items.Data;
 using Game.Runtime.Character;
 using Game.Runtime.Character.Components;
 using Game.Runtime.Core.DI;
-using DG.Tweening;
+using Game.Runtime.Core.Performance;
 using Game.Runtime.Items.Services;
 using Game.Runtime.Core.Extensions;
+using Game.Runtime.Character.Interfaces;
 
 namespace Game.Runtime.Store.Machines
 {
@@ -48,14 +50,19 @@ namespace Game.Runtime.Store.Machines
         private bool _isProducing = false;
         private int _currentSlotIndex = 0;
 
-        // Performance optimizations - resource management
+        // ✅ Performance optimizations - resource management
         private readonly List<Tween> _activeTweens = new List<Tween>();
         private readonly List<Transform> _activeGearAnimations = new List<Transform>();
+        private readonly Dictionary<BaseCharacterController, ICarryingController> _cachedCarryControllers = new Dictionary<BaseCharacterController, ICarryingController>();
         private Tween _interactionTween;
 
-        // Cached strings for performance
+        // ✅ Cached strings for performance
         private string _cachedCostText;
         private bool _costTextDirty = true;
+
+        // ✅ Performance tracking
+        private float _lastProductionTime;
+        private int _totalItemsProduced = 0;
 
         // Events
         public System.Action<Item> OnItemProduced;
@@ -110,10 +117,10 @@ namespace Game.Runtime.Store.Machines
             // Daha fazla taşıyamazsa alamaz
             if (!controller.CanCarryMore()) return false;
 
-            // Elinde farklı tip item varsa alamaz
+            // ✅ Cached carry controller kullan
             if (controller.HasItemsInHand())
             {
-                var carryController = controller.GetCachedCarryController();
+                var carryController = GetCachedCarryController(interactor.Character);
                 if (carryController != null && carryController.CurrentItemType() != machineData.ProducedItemType)
                 {
                     return false;
@@ -121,6 +128,23 @@ namespace Game.Runtime.Store.Machines
             }
 
             return true;
+        }
+
+        // ✅ Cache carry controllers to avoid repeated GetComponent calls
+        private ICarryingController GetCachedCarryController(BaseCharacterController character)
+        {
+            if (character == null) return null;
+
+            if (!_cachedCarryControllers.TryGetValue(character, out var carryController))
+            {
+                carryController = character.CarryingController;
+                if (carryController != null)
+                {
+                    _cachedCarryControllers[character] = carryController;
+                }
+            }
+
+            return carryController;
         }
 
         protected override void OnActiveInteractionStart(IInteractor interactor)
@@ -137,7 +161,11 @@ namespace Game.Runtime.Store.Machines
 
         protected override void OnActiveInteractionContinue(IInteractor interactor)
         {
-            TryGiveItem(interactor);
+            // ✅ Performance profiling
+            using (PerformanceMonitoringSystem.ProfileInteraction())
+            {
+                TryGiveItem(interactor);
+            }
         }
 
         protected override void OnActiveInteractionEnd(IInteractor interactor)
@@ -208,13 +236,17 @@ namespace Game.Runtime.Store.Machines
         {
             while (_isProducing && IsActive && machineData != null)
             {
-                if (_producedItems.Count < machineData.MaxCapacity)
+                // ✅ Performance profiling
+                using (PerformanceMonitoringSystem.ProfileProduction())
                 {
-                    yield return StartCoroutine(ProduceItemSequence());
-                }
-                else
-                {
-                    yield return new WaitForSeconds(fullCapacityWaitTime);
+                    if (_producedItems.Count < machineData.MaxCapacity)
+                    {
+                        yield return StartCoroutine(ProduceItemSequence());
+                    }
+                    else
+                    {
+                        yield return new WaitForSeconds(fullCapacityWaitTime);
+                    }
                 }
 
                 yield return new WaitForSeconds(machineData.ProductionInterval);
@@ -256,6 +288,10 @@ namespace Game.Runtime.Store.Machines
                                 if (productionVFX != null)
                                     productionVFX.Play();
 
+                                // ✅ Performance tracking
+                                _totalItemsProduced++;
+                                _lastProductionTime = Time.time;
+
                                 OnItemProduced?.Invoke(item);
                             }
                         });
@@ -268,6 +304,8 @@ namespace Game.Runtime.Store.Machines
                 else
                 {
                     _producedItems.Enqueue(item);
+                    _totalItemsProduced++;
+                    _lastProductionTime = Time.time;
                     OnItemProduced?.Invoke(item);
                 }
             }
@@ -283,7 +321,7 @@ namespace Game.Runtime.Store.Machines
             if (_producedItems.Count == 0 || interactor?.Character == null) return;
 
             var controller = interactor as InteractionController;
-            var carryController = controller?.GetCachedCarryController();
+            var carryController = GetCachedCarryController(interactor.Character);
 
             if (carryController != null && !carryController.IsFull())
             {
@@ -379,38 +417,58 @@ namespace Game.Runtime.Store.Machines
             return transform;
         }
 
+        // ✅ Performance monitoring methods
+        public float GetProductionRate()
+        {
+            if (_totalItemsProduced == 0) return 0f;
+            return _totalItemsProduced / (Time.time - _lastProductionTime);
+        }
+
+        public int GetTotalItemsProduced()
+        {
+            return _totalItemsProduced;
+        }
+
         // ==================== CLEANUP ====================
 
         private void CleanupAllTweens()
         {
-            // Clean up all tracked tweens
-            foreach (var tween in _activeTweens)
+            try
             {
-                if (tween != null && tween.IsActive())
+                // Clean up all tracked tweens
+                foreach (var tween in _activeTweens)
                 {
-                    tween.Kill();
+                    if (tween != null && tween.IsActive())
+                    {
+                        tween.Kill();
+                    }
                 }
-            }
-            _activeTweens.Clear();
+                _activeTweens.Clear();
 
-            // Clean up gear animations
-            foreach (var gear in _activeGearAnimations)
+                // Clean up gear animations
+                foreach (var gear in _activeGearAnimations)
+                {
+                    if (gear != null)
+                    {
+                        DOTween.Kill(gear);
+                    }
+                }
+                _activeGearAnimations.Clear();
+
+                // Clean up interaction tween
+                CleanupInteractionTween();
+            }
+            catch (System.Exception e)
             {
-                if (gear != null)
-                {
-                    DOTween.Kill(gear);
-                }
+                Debug.LogError($"Error cleaning up machine tweens: {e.Message}");
             }
-            _activeGearAnimations.Clear();
-
-            // Clean up interaction tween
-            CleanupInteractionTween();
         }
 
         protected override void OnDestroy()
         {
             StopProduction();
             CleanupAllTweens();
+            _cachedCarryControllers.Clear();
             base.OnDestroy();
         }
 
@@ -419,5 +477,17 @@ namespace Game.Runtime.Store.Machines
             StopProduction();
             CleanupAllTweens();
         }
+
+        // ✅ Debug information
+        #if UNITY_EDITOR
+        [ContextMenu("Show Production Stats")]
+        private void ShowProductionStats()
+        {
+            Debug.Log($"Machine Production Stats:\n" +
+                     $"Total Items Produced: {_totalItemsProduced}\n" +
+                     $"Current Rate: {GetProductionRate():F2} items/sec\n" +
+                     $"Items in Queue: {_producedItems.Count}/{machineData.MaxCapacity}");
+        }
+        #endif
     }
 }

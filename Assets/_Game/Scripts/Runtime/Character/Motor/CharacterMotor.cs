@@ -111,10 +111,21 @@ namespace Game.Runtime.Character.Motor
                 : 0f;
             bool isMoving = normalizedSpeed > movementThreshold;
 
-            // Base Layer - Sadece yürüme ve idle
-            CharacterAnimator.SetFloat(AnimationParameters.Speed, 
-                normalizedSpeed * _runtimeSettings.AnimationSpeedMultiplier);
-            CharacterAnimator.SetBool(AnimationParameters.IsMoving, isMoving);
+            // ✅ AnimationHelper kullanarak doğru şekilde set etme
+            AnimationHelper.SetMovementState(
+                CharacterAnimator, 
+                normalizedSpeed * _runtimeSettings.AnimationSpeedMultiplier, 
+                isMoving
+            );
+        }
+
+        // ✅ Carrying durumu için yeni method
+        public void SetCarryingState(bool isCarrying)
+        {
+            if (CharacterAnimator != null)
+            {
+                AnimationHelper.SetCarryingState(CharacterAnimator, isCarrying);
+            }
         }
 
         public void SetCharacterSettings(CharacterData newSettings)

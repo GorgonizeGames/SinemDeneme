@@ -12,7 +12,7 @@ namespace Game.Runtime.Character.States.UpperBody
         {
             Debug.Log("📦 Upper body: CARRYING");
 
-            // Upper Body Layer'da carrying animasyonunu aktif et
+            // ✅ AnimationHelper kullanarak doğru animasyon set etme
             SetCarryingAnimation(owner, true);
         }
 
@@ -25,6 +25,9 @@ namespace Game.Runtime.Character.States.UpperBody
         public override void OnExit(ICarryingController owner)
         {
             Debug.Log("📦 Exiting carrying state");
+            
+            // ✅ Exit sırasında animasyonu temizle
+            SetCarryingAnimation(owner, false);
         }
 
         private void SetCarryingAnimation(ICarryingController owner, bool isCarrying)
@@ -32,11 +35,8 @@ namespace Game.Runtime.Character.States.UpperBody
             var characterController = (owner as MonoBehaviour)?.GetComponent<ICharacterController>();
             if (characterController?.Animator != null)
             {
-                // Upper Body Layer parametresi
-                characterController.Animator.SetBool(AnimationParameters.IsCarrying, isCarrying);
-
-                // Upper Body Layer weight ayarla (taşırken layer aktif)
-                characterController.Animator.SetLayerWeight(AnimationLayers.UpperBodyLayer, isCarrying ? 1f : 0f);
+                // ✅ AnimationHelper kullanarak carrying state'i set et
+                AnimationHelper.SetCarryingState(characterController.Animator, isCarrying);
             }
         }
     }

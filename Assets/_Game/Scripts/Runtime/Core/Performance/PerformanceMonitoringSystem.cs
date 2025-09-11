@@ -15,7 +15,7 @@ namespace Game.Runtime.Core.Performance
         [Header("Performance Thresholds")]
         [SerializeField] private float targetFrameRate = 60f;
         [SerializeField] private int maxMemoryMB = 512;
-        [SerializeField] private int maxDrawCalls = 500;
+        [SerializeField] private int maxDrawCalls = 500; // ✅ Bu field artık kullanılıyor
 
         // Performance metrics
         private float _frameRate;
@@ -78,9 +78,10 @@ namespace Game.Runtime.Core.Performance
             // Memory usage
             _memoryUsage = System.GC.GetTotalMemory(false) / (1024 * 1024); // Convert to MB
 
-            // Basic rendering stats (simplified since DebugUI.instance is not always available)
-            _drawCalls = 0; // Unity's rendering stats are not easily accessible in runtime
-            _triangles = 0; // These would need to be tracked manually or via profiler
+            // ✅ Rendering stats - basic tracking (Unity doesn't expose these easily at runtime)
+            // Note: These would need to be tracked via Unity Profiler API or custom counting
+            _drawCalls = GetEstimatedDrawCalls(); // Custom estimation method
+            _triangles = GetEstimatedTriangles(); // Custom estimation method
 
             // Store history for trend analysis
             StorePerformanceHistory();
@@ -90,6 +91,33 @@ namespace Game.Runtime.Core.Performance
             _performanceMetrics["MemoryMB"] = _memoryUsage;
             _performanceMetrics["DrawCalls"] = _drawCalls;
             _performanceMetrics["Triangles"] = _triangles;
+        }
+
+        // ✅ Custom methods to estimate rendering stats
+        private int GetEstimatedDrawCalls()
+        {
+            // Basic estimation based on active renderers in scene
+            // In a real implementation, you'd track this more accurately
+            var renderers = FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            int activeRenderers = 0;
+            
+            foreach (var renderer in renderers)
+            {
+                if (renderer.enabled && renderer.gameObject.activeInHierarchy)
+                {
+                    activeRenderers++;
+                }
+            }
+            
+            return activeRenderers; // Simplified estimation
+        }
+
+        private int GetEstimatedTriangles()
+        {
+            // Basic estimation - in real implementation you'd sum up mesh triangle counts
+            // This is a placeholder that could be enhanced with actual mesh data
+            var meshRenderers = FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            return meshRenderers.Length * 100; // Rough estimate
         }
 
         private void StorePerformanceHistory()
@@ -119,6 +147,12 @@ namespace Game.Runtime.Core.Performance
             {
                 Debug.LogWarning($"Performance Warning: Memory usage is {_memoryUsage} MB (limit: {maxMemoryMB} MB)");
             }
+
+            // ✅ Check draw calls - artık kullanılıyor
+            if (_drawCalls > maxDrawCalls)
+            {
+                Debug.LogWarning($"Performance Warning: Draw calls exceeded limit: {_drawCalls} (max: {maxDrawCalls})");
+            }
         }
 
         void OnGUI()
@@ -126,7 +160,7 @@ namespace Game.Runtime.Core.Performance
             if (!enableMonitoring || !showOnScreenDisplay) return;
 
             // Simple on-screen performance display
-            var rect = new Rect(10, 10, 300, 120);
+            var rect = new Rect(10, 10, 300, 140); // ✅ Height increased for draw calls
             GUI.Box(rect, "Performance Monitor");
 
             var labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 12 };
@@ -135,6 +169,39 @@ namespace Game.Runtime.Core.Performance
             GUI.Label(new Rect(15, 50, 290, 20), $"Memory: {_memoryUsage} MB", labelStyle);
             GUI.Label(new Rect(15, 70, 290, 20), $"Draw Calls: {_drawCalls}", labelStyle);
             GUI.Label(new Rect(15, 90, 290, 20), $"Triangles: {_triangles}", labelStyle);
+
+            // ✅ Performance status indicator
+            string status = GetPerformanceStatus();
+            var statusColor = GetPerformanceStatusColor();
+            var statusStyle = new GUIStyle(labelStyle) { normal = { textColor = statusColor } };
+            GUI.Label(new Rect(15, 110, 290, 20), $"Status: {status}", statusStyle);
+        }
+
+        // ✅ Performance status methods
+        private string GetPerformanceStatus()
+        {
+            bool frameRateOk = _frameRate >= targetFrameRate * 0.8f;
+            bool memoryOk = _memoryUsage <= maxMemoryMB;
+            bool drawCallsOk = _drawCalls <= maxDrawCalls;
+
+            if (frameRateOk && memoryOk && drawCallsOk)
+                return "GOOD";
+            else if (_frameRate < targetFrameRate * 0.5f || _memoryUsage > maxMemoryMB * 1.5f || _drawCalls > maxDrawCalls * 1.5f)
+                return "CRITICAL";
+            else
+                return "WARNING";
+        }
+
+        private Color GetPerformanceStatusColor()
+        {
+            string status = GetPerformanceStatus();
+            return status switch
+            {
+                "GOOD" => Color.green,
+                "WARNING" => Color.yellow,
+                "CRITICAL" => Color.red,
+                _ => Color.white
+            };
         }
 
         // Public static methods for profiling critical sections
@@ -174,6 +241,11 @@ namespace Game.Runtime.Core.Performance
             return new Dictionary<string, float>(_performanceMetrics);
         }
 
+        // ✅ Performance threshold getters
+        public int MaxDrawCalls => maxDrawCalls;
+        public int MaxMemoryMB => maxMemoryMB;
+        public float TargetFrameRate => targetFrameRate;
+
         // Garbage collection monitoring
         [ContextMenu("Force GC and Log")]
         public void ForceGCAndLog()
@@ -196,8 +268,9 @@ namespace Game.Runtime.Core.Performance
             report.AppendLine($"Current FPS: {_frameRate:F1}");
             report.AppendLine($"Average Frame Time: {GetAverageFrameTime():F3}ms");
             report.AppendLine($"Memory Usage: {_memoryUsage} MB");
-            report.AppendLine($"Draw Calls: {_drawCalls}");
+            report.AppendLine($"Draw Calls: {_drawCalls}"); // ✅ Now included in report
             report.AppendLine($"Triangles: {_triangles}");
+            report.AppendLine($"Performance Status: {GetPerformanceStatus()}");
             
             if (_frameTimeHistory.Count > 10)
             {

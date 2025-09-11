@@ -4,6 +4,7 @@ using Game.Runtime.Items.Interfaces;
 using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Character.AI.Factory;
 using Game.Runtime.Character.Components;
+using Game.Runtime.Character.Animation;
 
 namespace Game.Runtime.Character.AI
 {
@@ -38,7 +39,6 @@ namespace Game.Runtime.Character.AI
 
         // Performance optimization - cached values to avoid allocations
         private Vector2 _cachedMovementInput = Vector2.zero;
-        private readonly Vector3 _tempVector3 = Vector3.zero;
         
         // Cached debug strings to avoid string allocation in hot paths
         private string _cachedInitMessage;

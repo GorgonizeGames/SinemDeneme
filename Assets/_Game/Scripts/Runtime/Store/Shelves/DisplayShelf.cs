@@ -9,6 +9,7 @@ using Game.Runtime.Character.Components;
 using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Character.AI;
 using Game.Runtime.Core.Extensions;
+using Game.Runtime.Core.Performance;
 using DG.Tweening;
 
 namespace Game.Runtime.Store.Shelves
@@ -34,12 +35,17 @@ namespace Game.Runtime.Store.Shelves
         private List<Item> _displayedItems = new List<Item>();
         private Dictionary<Transform, Item> _slotItemMap = new Dictionary<Transform, Item>();
 
-        // Performance optimizations - cached components and reusable collections
+        // ✅ Performance optimizations - cached components and reusable collections
         private readonly Dictionary<BaseCharacterController, ICarryingController> _cachedCarryControllers =
             new Dictionary<BaseCharacterController, ICarryingController>();
         private readonly List<Item> _tempItemList = new List<Item>();
         private readonly List<Tween> _activeTweens = new List<Tween>();
         private Tween _interactionTween;
+
+        // ✅ Performance tracking
+        private int _totalItemsStocked = 0;
+        private int _totalItemsSold = 0;
+        private float _lastStockTime = 0f;
 
         // Events
         public System.Action<Item> OnItemStocked;
@@ -87,14 +93,18 @@ namespace Game.Runtime.Store.Shelves
 
             try
             {
-                var controller = interactor as InteractionController;
-                if (controller == null) return false;
+                // ✅ Performance profiling
+                using (PerformanceMonitoringSystem.ProfileInteraction())
+                {
+                    var controller = interactor as InteractionController;
+                    if (controller == null) return false;
 
-                var character = interactor.Character;
+                    var character = interactor.Character;
 
-                return IsEmployeeOrPlayer(character)
-                    ? CanEmployeeInteract(controller, character)
-                    : IsCustomer(character) && CanCustomerInteract(controller);
+                    return IsEmployeeOrPlayer(character)
+                        ? CanEmployeeInteract(controller, character)
+                        : IsCustomer(character) && CanCustomerInteract(controller);
+                }
             }
             catch (System.Exception e)
             {
@@ -136,7 +146,7 @@ namespace Game.Runtime.Store.Shelves
             }
         }
 
-        // Cache carry controllers to avoid repeated GetComponent calls
+        // ✅ Cache carry controllers to avoid repeated GetComponent calls
         private ICarryingController GetCachedCarryController(BaseCharacterController character)
         {
             if (character == null) return null;
@@ -178,15 +188,19 @@ namespace Game.Runtime.Store.Shelves
 
             try
             {
-                var character = interactor.Character;
+                // ✅ Performance profiling
+                using (PerformanceMonitoringSystem.ProfileInteraction())
+                {
+                    var character = interactor.Character;
 
-                if (IsEmployeeOrPlayer(character))
-                {
-                    TryStockItem(interactor);
-                }
-                else if (IsCustomer(character))
-                {
-                    TryTakeItem(interactor);
+                    if (IsEmployeeOrPlayer(character))
+                    {
+                        TryStockItem(interactor);
+                    }
+                    else if (IsCustomer(character))
+                    {
+                        TryTakeItem(interactor);
+                    }
                 }
             }
             catch (System.Exception e)
@@ -248,9 +262,17 @@ namespace Game.Runtime.Store.Shelves
                 {
                     item.OnPlacedOnShelf(slot);
 
-                    // Animate placement with proper tween tracking
+                    // ✅ Animate placement with proper tween tracking
                     item.transform.localScale = Vector3.zero;
-                    Tween placementTween = item.transform.DOScale(1f, stockAnimationDuration).SetEase(Ease.OutBack);
+                    Tween placementTween = item.transform.DOScale(1f, stockAnimationDuration)
+                        .SetEase(Ease.OutBack)
+                        .OnComplete(() =>
+                        {
+                            // ✅ Performance tracking
+                            _totalItemsStocked++;
+                            _lastStockTime = Time.time;
+                        });
+                    
                     if (placementTween != null)
                     {
                         _activeTweens.Add(placementTween);
@@ -283,6 +305,10 @@ namespace Game.Runtime.Store.Shelves
                     if (item != null && carryController.TryPickupItem(item))
                     {
                         RemoveItemFromShelf(item);
+                        
+                        // ✅ Performance tracking
+                        _totalItemsSold++;
+                        
                         OnItemPurchased?.Invoke(item);
                     }
                 }
@@ -347,7 +373,7 @@ namespace Game.Runtime.Store.Shelves
 
             try
             {
-                // Use temp list to avoid allocation
+                // ✅ Use temp list to avoid allocation
                 _tempItemList.Clear();
                 _tempItemList.AddRange(_displayedItems);
 
@@ -361,7 +387,9 @@ namespace Game.Runtime.Store.Shelves
                         Transform slot = displaySlots[index];
                         if (slot != null)
                         {
-                            Tween moveTween = item.transform.DOMove(slot.position, rearrangeAnimationDuration);
+                            Tween moveTween = item.transform.DOMove(slot.position, rearrangeAnimationDuration)
+                                .SetEase(Ease.OutQuad);
+                            
                             if (moveTween != null)
                             {
                                 _activeTweens.Add(moveTween);
@@ -401,6 +429,29 @@ namespace Game.Runtime.Store.Shelves
                 return customerBrowsePoints[Random.Range(0, customerBrowsePoints.Length)];
             }
             return transform;
+        }
+
+        // ✅ Performance monitoring methods
+        public float GetStockingRate()
+        {
+            if (_totalItemsStocked == 0) return 0f;
+            return _totalItemsStocked / (Time.time - _lastStockTime);
+        }
+
+        public int GetTotalItemsStocked()
+        {
+            return _totalItemsStocked;
+        }
+
+        public int GetTotalItemsSold()
+        {
+            return _totalItemsSold;
+        }
+
+        public float GetSalesRate()
+        {
+            if (_totalItemsSold == 0) return 0f;
+            return _totalItemsSold / Time.time;
         }
 
         // ==================== CLEANUP ====================
@@ -447,5 +498,19 @@ namespace Game.Runtime.Store.Shelves
         {
             CleanupAllTweens();
         }
+
+        // ✅ Debug information
+        #if UNITY_EDITOR
+        [ContextMenu("Show Shelf Stats")]
+        private void ShowShelfStats()
+        {
+            Debug.Log($"Shelf Stats:\n" +
+                     $"Items Stocked: {_totalItemsStocked}\n" +
+                     $"Items Sold: {_totalItemsSold}\n" +
+                     $"Current Stock: {ItemCount}/{displaySlots?.Length ?? 0}\n" +
+                     $"Stock Percentage: {StockPercentage:P}\n" +
+                     $"Sales Rate: {GetSalesRate():F2} items/sec");
+        }
+        #endif
     }
 }

@@ -4,6 +4,7 @@ using Game.Runtime.Core.Extensions;
 using Game.Runtime.Core.StateMachine;
 using Game.Runtime.Character.Motor;
 using Game.Runtime.Character.States;
+using Game.Runtime.Character.States.UpperBody;
 using Game.Runtime.Character.Components;
 using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Core.Interfaces;
@@ -20,7 +21,8 @@ namespace Game.Runtime.Character
 
         // Cached components to avoid repeated GetComponent calls
         protected CharacterMotor _motor;
-        protected StateMachine<ICharacterController> _stateMachine;
+        protected StateMachine<ICharacterController> _movementStateMachine;  // ✅ Rename for clarity
+        protected StateMachine<ICarryingController> _upperBodyStateMachine; // ✅ Added carrying state machine
         protected InteractionController _interactionController;
         protected StackingCarryController _carryingController;
 
@@ -120,11 +122,13 @@ namespace Game.Runtime.Character
 
             try
             {
-                SetupStateMachine();
+                SetupStateMachines(); // ✅ Updated method name
                 SetupGameStateHandling();
+                SetupCarryingEvents(); // ✅ Added carrying events
 
-                // Start with idle state
-                _stateMachine.ChangeState<CharacterIdleState>();
+                // Start with idle states
+                _movementStateMachine.ChangeState<CharacterIdleState>();
+                _upperBodyStateMachine.ChangeState<HandsFreeState>();
 
                 // Call derived class initialization
                 OnInitialize();
@@ -136,18 +140,58 @@ namespace Game.Runtime.Character
             }
         }
 
-        protected virtual void SetupStateMachine()
+        protected virtual void SetupStateMachines()
         {
             try
             {
-                _stateMachine = new StateMachine<ICharacterController>(this);
-                _stateMachine.AddState(new CharacterIdleState());
-                _stateMachine.AddState(new CharacterMovingState());
+                // ✅ Movement state machine
+                _movementStateMachine = new StateMachine<ICharacterController>(this);
+                _movementStateMachine.AddState(new CharacterIdleState());
+                _movementStateMachine.AddState(new CharacterMovingState());
+
+                // ✅ Upper body state machine for carrying
+                _upperBodyStateMachine = new StateMachine<ICarryingController>(_carryingController);
+                _upperBodyStateMachine.AddState(new HandsFreeState());
+                _upperBodyStateMachine.AddState(new CarryingState());
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error setting up state machine: {e.Message}", this);
+                Debug.LogError($"Error setting up state machines: {e.Message}", this);
                 throw; // Re-throw to prevent invalid initialization
+            }
+        }
+
+        // ✅ Carrying events setup
+        protected virtual void SetupCarryingEvents()
+        {
+            if (_carryingController is StackingCarryController stackingController)
+            {
+                // Subscribe to carrying state changes
+                stackingController.OnCarryingStateChanged += HandleCarryingStateChange;
+            }
+        }
+
+        // ✅ Handle carrying state changes
+        protected virtual void HandleCarryingStateChange(bool isCarrying)
+        {
+            try
+            {
+                // Update motor animation state
+                _motor?.SetCarryingState(isCarrying);
+
+                // Update upper body state machine
+                if (isCarrying)
+                {
+                    _upperBodyStateMachine?.ChangeState<CarryingState>();
+                }
+                else
+                {
+                    _upperBodyStateMachine?.ChangeState<HandsFreeState>();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error handling carrying state change: {e.Message}", this);
             }
         }
 
@@ -185,7 +229,8 @@ namespace Game.Runtime.Character
             try
             {
                 HandleInput();
-                _stateMachine?.Update();
+                _movementStateMachine?.Update();        // ✅ Movement states
+                _upperBodyStateMachine?.Update();       // ✅ Upper body states
             }
             catch (System.Exception e)
             {
@@ -203,7 +248,8 @@ namespace Game.Runtime.Character
 
             try
             {
-                _stateMachine?.FixedUpdate();
+                _movementStateMachine?.FixedUpdate();   // ✅ Movement physics
+                _upperBodyStateMachine?.FixedUpdate();  // ✅ Upper body physics
             }
             catch (System.Exception e)
             {
@@ -216,7 +262,7 @@ namespace Game.Runtime.Character
         {
             try
             {
-                return _stateMachine?.ChangeState<T>() ?? false;
+                return _movementStateMachine?.ChangeState<T>() ?? false;
             }
             catch (System.Exception e)
             {
@@ -292,8 +338,14 @@ namespace Game.Runtime.Character
                     _gameManager.OnStateChanged -= HandleGameStateChange;
                 }
 
-                // Clean up state machine
-                _stateMachine?.Cleanup();
+                if (_carryingController is StackingCarryController stackingController)
+                {
+                    stackingController.OnCarryingStateChanged -= HandleCarryingStateChange;
+                }
+
+                // Clean up state machines
+                _movementStateMachine?.Cleanup();
+                _upperBodyStateMachine?.Cleanup();
             }
             catch (System.Exception e)
             {

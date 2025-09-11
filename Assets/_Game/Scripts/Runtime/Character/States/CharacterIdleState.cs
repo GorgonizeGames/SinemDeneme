@@ -24,11 +24,10 @@ namespace Game.Runtime.Character.States
 
             _motor.Stop();
 
-            // AnimationParameters kullanarak güvenli set etme
+            // ✅ AnimationHelper kullanarak doğru animasyon set etme
             if (owner.Animator != null)
             {
-                owner.Animator.SetBool(AnimationParameters.IsMoving, false);
-                owner.Animator.SetFloat(AnimationParameters.Speed, 0f);
+                AnimationHelper.SetMovementState(owner.Animator, 0f, false);
             }
 
             Debug.Log("💤 Character entered IDLE state");

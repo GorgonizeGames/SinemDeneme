@@ -22,10 +22,10 @@ namespace Game.Runtime.Character.States
                 }
             }
 
-            // AnimationParameters kullanarak güvenli set etme
+            // ✅ AnimationHelper kullanarak doğru animasyon set etme
             if (owner.Animator != null)
             {
-                owner.Animator.SetBool(AnimationParameters.IsMoving, true);
+                AnimationHelper.SetMovementState(owner.Animator, owner.MovementInput.magnitude, true);
             }
 
             Debug.Log("🏃 Character entered MOVING state");
@@ -37,11 +37,11 @@ namespace Game.Runtime.Character.States
             {
                 _motor.SetMovementInput(owner.MovementInput);
 
-                // Speed parametresini güncelle
+                // ✅ Speed parametresini AnimationHelper ile güncelle
                 if (owner.Animator != null)
                 {
                     float speed = owner.MovementInput.magnitude;
-                    owner.Animator.SetFloat(AnimationParameters.Speed, speed);
+                    AnimationHelper.SetMovementState(owner.Animator, speed, true);
                 }
             }
 

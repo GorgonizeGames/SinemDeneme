@@ -18,6 +18,11 @@ namespace Game.Runtime.Character.Components
         private Stack<Item> _carriedItems = new Stack<Item>();
         private ItemType _currentItemType = ItemType.None;
 
+        // ✅ Events for state changes
+        public System.Action<bool> OnCarryingStateChanged;
+        public System.Action<Item> OnItemPickedUp;
+        public System.Action<Item> OnItemDropped;
+
         // ICarryingController Implementation
         public bool IsCarrying => _carriedItems.Count > 0;
         public GameObject CarriedItem => _carriedItems.Count > 0 ? _carriedItems.Peek().gameObject : null;
@@ -58,6 +63,8 @@ namespace Game.Runtime.Character.Components
             var item = pickupable as Item;
             if (item == null) return false;
 
+            bool wasCarrying = IsCarrying;
+
             // Set item type if this is the first item
             if (_carriedItems.Count == 0)
             {
@@ -74,6 +81,15 @@ namespace Game.Runtime.Character.Components
             // Position the item in the stack
             item.transform.position = stackPosition;
 
+            // ✅ Fire events
+            OnItemPickedUp?.Invoke(item);
+
+            // ✅ Check if carrying state changed
+            if (!wasCarrying && IsCarrying)
+            {
+                OnCarryingStateChanged?.Invoke(true);
+            }
+
             return true;
         }
 
@@ -81,6 +97,7 @@ namespace Game.Runtime.Character.Components
         {
             if (_carriedItems.Count == 0) return false;
 
+            bool wasCarrying = IsCarrying;
             Item topItem = _carriedItems.Pop();
             Vector3 dropPosition = transform.position + transform.forward * 1f;
 
@@ -92,6 +109,15 @@ namespace Game.Runtime.Character.Components
                 _currentItemType = ItemType.None;
             }
 
+            // ✅ Fire events
+            OnItemDropped?.Invoke(topItem);
+
+            // ✅ Check if carrying state changed
+            if (wasCarrying && !IsCarrying)
+            {
+                OnCarryingStateChanged?.Invoke(false);
+            }
+
             return true;
         }
 
@@ -99,6 +125,7 @@ namespace Game.Runtime.Character.Components
         {
             if (_carriedItems.Count == 0) return null;
 
+            bool wasCarrying = IsCarrying;
             Item topItem = _carriedItems.Pop();
 
             // Clear item type if stack is empty
@@ -107,14 +134,31 @@ namespace Game.Runtime.Character.Components
                 _currentItemType = ItemType.None;
             }
 
+            // ✅ Fire events
+            OnItemDropped?.Invoke(topItem);
+
+            // ✅ Check if carrying state changed
+            if (wasCarrying && !IsCarrying)
+            {
+                OnCarryingStateChanged?.Invoke(false);
+            }
+
             return topItem;
         }
 
         public void ForceDropItem()
         {
+            bool wasCarrying = IsCarrying;
+
             while (_carriedItems.Count > 0)
             {
                 TryDropItem();
+            }
+
+            // ✅ Only fire state change event once
+            if (wasCarrying && !IsCarrying)
+            {
+                OnCarryingStateChanged?.Invoke(false);
             }
         }
 
@@ -126,6 +170,11 @@ namespace Game.Runtime.Character.Components
         void OnDestroy()
         {
             ForceDropItem();
+            
+            // ✅ Clean up events
+            OnCarryingStateChanged = null;
+            OnItemPickedUp = null;
+            OnItemDropped = null;
         }
     }
 }

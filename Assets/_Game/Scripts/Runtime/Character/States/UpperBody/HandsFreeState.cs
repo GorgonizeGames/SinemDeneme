@@ -12,7 +12,7 @@ namespace Game.Runtime.Character.States.UpperBody
         {
             Debug.Log("🙌 Upper body: HANDS FREE");
 
-            // Upper Body Layer'ı deaktif et
+            // ✅ AnimationHelper kullanarak doğru animasyon set etme
             SetHandsFreeAnimation(owner);
         }
 
@@ -32,11 +32,8 @@ namespace Game.Runtime.Character.States.UpperBody
             var characterController = (owner as MonoBehaviour)?.GetComponent<ICharacterController>();
             if (characterController?.Animator != null)
             {
-                // Upper Body Layer parametresi
-                characterController.Animator.SetBool(AnimationParameters.IsCarrying, false);
-
-                // Upper Body Layer weight'i 0 yap (eller serbest)
-                characterController.Animator.SetLayerWeight(AnimationLayers.UpperBodyLayer, 0f);
+                // ✅ AnimationHelper kullanarak carrying state'i false yap
+                AnimationHelper.SetCarryingState(characterController.Animator, false);
             }
         }
     }
