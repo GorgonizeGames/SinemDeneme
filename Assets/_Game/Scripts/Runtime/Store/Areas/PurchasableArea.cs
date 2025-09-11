@@ -40,6 +40,15 @@ namespace Game.Runtime.Store.Areas
         protected float _purchaseProgress = 0f;
         protected IInteractor _purchasingInteractor;
 
+        // Performance optimizations
+        private readonly System.Collections.Generic.List<Tween> _activeTweens = new System.Collections.Generic.List<Tween>();
+        private Tween _purchaseVisualTween;
+        private Tween _activationTween;
+
+        // Cached strings to avoid allocation in hot paths
+        private string _cachedCostText;
+        private bool _costTextDirty = true;
+
         // IInteractable Implementation
         public virtual InteractionType InteractionType => interactionType;
         public virtual InteractionPriority Priority => interactionPriority;
@@ -57,13 +66,37 @@ namespace Game.Runtime.Store.Areas
 
         protected virtual void Awake()
         {
-            this.InjectDependencies();
-            LoadState();
+            try
+            {
+                this.InjectDependencies();
+                PrepareCachedStrings();
+                LoadState();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error during PurchasableArea Awake: {e.Message}", this);
+            }
         }
 
         protected virtual void Start()
         {
-            UpdateVisuals();
+            try
+            {
+                UpdateVisuals();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error during PurchasableArea Start: {e.Message}", this);
+            }
+        }
+
+        private void PrepareCachedStrings()
+        {
+            if (areaData != null)
+            {
+                _cachedCostText = $"${areaData.PurchaseCost}";
+                _costTextDirty = false;
+            }
         }
 
         // ==================== IInteractable Implementation ====================
@@ -72,18 +105,25 @@ namespace Game.Runtime.Store.Areas
         {
             if (interactor?.Character == null) return false;
 
-            if (IsLocked)
+            try
             {
-                if (interactor.Character is PlayerCharacterController)
+                if (IsLocked)
                 {
-                    return _economyService != null && _economyService.CanAfford(areaData.PurchaseCost);
+                    if (interactor.Character is PlayerCharacterController)
+                    {
+                        return _economyService != null && _economyService.CanAfford(areaData.PurchaseCost);
+                    }
+                    return false;
                 }
-                return false;
-            }
 
-            if (IsActive)
+                if (IsActive)
+                {
+                    return CanInteractWhenActive(interactor);
+                }
+            }
+            catch (System.Exception e)
             {
-                return CanInteractWhenActive(interactor);
+                Debug.LogError($"Error in CanInteract: {e.Message}", this);
             }
 
             return false;
@@ -93,37 +133,58 @@ namespace Game.Runtime.Store.Areas
         {
             if (interactor?.Character == null) return;
 
-            if (IsLocked && interactor.Character is PlayerCharacterController)
+            try
             {
-                StartPurchaseProcess(interactor);
+                if (IsLocked && interactor.Character is PlayerCharacterController)
+                {
+                    StartPurchaseProcess(interactor);
+                }
+                else if (IsActive)
+                {
+                    OnActiveInteractionStart(interactor);
+                }
             }
-            else if (IsActive)
+            catch (System.Exception e)
             {
-                OnActiveInteractionStart(interactor);
+                Debug.LogError($"Error in OnInteractionStart: {e.Message}", this);
             }
         }
 
         public virtual void OnInteractionContinue(IInteractor interactor)
         {
-            if (IsPurchasing && _purchasingInteractor == interactor)
+            try
             {
-                ContinuePurchaseProcess();
+                if (IsPurchasing && _purchasingInteractor == interactor)
+                {
+                    ContinuePurchaseProcess();
+                }
+                else if (IsActive)
+                {
+                    OnActiveInteractionContinue(interactor);
+                }
             }
-            else if (IsActive)
+            catch (System.Exception e)
             {
-                OnActiveInteractionContinue(interactor);
+                Debug.LogError($"Error in OnInteractionContinue: {e.Message}", this);
             }
         }
 
         public virtual void OnInteractionEnd(IInteractor interactor)
         {
-            if (IsPurchasing && _purchasingInteractor == interactor)
+            try
             {
-                CancelPurchaseProcess();
+                if (IsPurchasing && _purchasingInteractor == interactor)
+                {
+                    CancelPurchaseProcess();
+                }
+                else if (IsActive)
+                {
+                    OnActiveInteractionEnd(interactor);
+                }
             }
-            else if (IsActive)
+            catch (System.Exception e)
             {
-                OnActiveInteractionEnd(interactor);
+                Debug.LogError($"Error in OnInteractionEnd: {e.Message}", this);
             }
         }
 
@@ -138,80 +199,124 @@ namespace Game.Runtime.Store.Areas
 
         protected virtual void StartPurchaseProcess(IInteractor interactor)
         {
-            _currentState = PurchasableAreaState.Purchasing;
-            _purchasingInteractor = interactor;
-            _purchaseProgress = 0f;
-
-            // Visual feedback
-            if (progressBar != null)
+            try
             {
-                progressBar.fillAmount = 0f;
-                progressBar.transform.parent.gameObject.SetActive(true);
+                _currentState = PurchasableAreaState.Purchasing;
+                _purchasingInteractor = interactor;
+                _purchaseProgress = 0f;
+
+                // Visual feedback
+                if (progressBar != null)
+                {
+                    progressBar.fillAmount = 0f;
+                    progressBar.transform.parent.gameObject.SetActive(true);
+                }
+
+                if (purchaseVisual != null)
+                {
+                    CleanupPurchaseVisualTween();
+                    _purchaseVisualTween = purchaseVisual.transform.DOScale(purchaseScaleAmount, purchaseAnimDuration)
+                        .SetLoops(-1, LoopType.Yoyo);
+                    
+                    if (_purchaseVisualTween != null)
+                    {
+                        _activeTweens.Add(_purchaseVisualTween);
+                    }
+                }
             }
-
-            if (purchaseVisual != null)
+            catch (System.Exception e)
             {
-                purchaseVisual.transform.DOScale(purchaseScaleAmount, purchaseAnimDuration)
-                    .SetLoops(-1, LoopType.Yoyo);
+                Debug.LogError($"Error starting purchase process: {e.Message}", this);
+                CancelPurchaseProcess();
             }
         }
 
         protected virtual void ContinuePurchaseProcess()
         {
-            _purchaseProgress += Time.deltaTime / purchaseDuration;
-
-            if (progressBar != null)
-                progressBar.fillAmount = _purchaseProgress;
-
-            if (_purchaseProgress >= 1f)
+            try
             {
-                CompletePurchase();
+                _purchaseProgress += Time.deltaTime / purchaseDuration;
+
+                if (progressBar != null)
+                    progressBar.fillAmount = _purchaseProgress;
+
+                if (_purchaseProgress >= 1f)
+                {
+                    CompletePurchase();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error continuing purchase process: {e.Message}", this);
+                CancelPurchaseProcess();
             }
         }
 
         protected virtual void CancelPurchaseProcess()
         {
-            _currentState = PurchasableAreaState.Locked;
-            _purchasingInteractor = null;
-            _purchaseProgress = 0f;
-
-            // Reset visuals
-            if (progressBar != null)
+            try
             {
-                progressBar.fillAmount = 0f;
-                progressBar.transform.parent.gameObject.SetActive(false);
+                _currentState = PurchasableAreaState.Locked;
+                _purchasingInteractor = null;
+                _purchaseProgress = 0f;
+
+                // Reset visuals
+                if (progressBar != null)
+                {
+                    progressBar.fillAmount = 0f;
+                    progressBar.transform.parent.gameObject.SetActive(false);
+                }
+
+                CleanupPurchaseVisualTween();
+
+                if (purchaseVisual != null)
+                {
+                    Tween resetTween = purchaseVisual.transform.DOScale(1f, visualResetDuration);
+                    if (resetTween != null)
+                    {
+                        _activeTweens.Add(resetTween);
+                    }
+                }
             }
-
-            if (purchaseVisual != null)
+            catch (System.Exception e)
             {
-                DOTween.Kill(purchaseVisual);
-                purchaseVisual.transform.DOScale(1f, visualResetDuration);
+                Debug.LogError($"Error canceling purchase process: {e.Message}", this);
             }
         }
 
         protected virtual void CompletePurchase()
         {
-            if (_economyService != null && _economyService.TrySpend(areaData.PurchaseCost))
+            try
             {
-                SetState(PurchasableAreaState.Active);
-                OnPurchased?.Invoke(this);
-
-                // Visual feedback
-                if (activeVisual != null)
+                if (_economyService != null && _economyService.TrySpend(areaData.PurchaseCost))
                 {
-                    activeVisual.transform.DOScale(0f, 0f);
-                    activeVisual.transform.DOScale(1f, activationScaleDuration).SetEase(Ease.OutBack);
-                }
+                    SetState(PurchasableAreaState.Active);
+                    OnPurchased?.Invoke(this);
 
-                if (purchaseVisual != null)
+                    // Visual feedback
+                    if (activeVisual != null)
+                    {
+                        activeVisual.transform.localScale = Vector3.zero;
+                        CleanupActivationTween();
+                        _activationTween = activeVisual.transform.DOScale(1f, activationScaleDuration).SetEase(Ease.OutBack);
+                        
+                        if (_activationTween != null)
+                        {
+                            _activeTweens.Add(_activationTween);
+                        }
+                    }
+
+                    CleanupPurchaseVisualTween();
+                    _purchasingInteractor = null;
+                }
+                else
                 {
-                    DOTween.Kill(purchaseVisual);
+                    CancelPurchaseProcess();
                 }
-
-                _purchasingInteractor = null;
             }
-            else
+            catch (System.Exception e)
             {
+                Debug.LogError($"Error completing purchase: {e.Message}", this);
                 CancelPurchaseProcess();
             }
         }
@@ -220,33 +325,112 @@ namespace Game.Runtime.Store.Areas
 
         protected virtual void LoadState()
         {
-            SetState(_currentState);
+            try
+            {
+                SetState(_currentState);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error loading state: {e.Message}", this);
+            }
         }
 
         public virtual void SetState(PurchasableAreaState newState)
         {
-            _currentState = newState;
-            UpdateVisuals();
-
-            if (newState == PurchasableAreaState.Active)
+            try
             {
-                OnActivated?.Invoke(this);
+                _currentState = newState;
+                UpdateVisuals();
+
+                if (newState == PurchasableAreaState.Active)
+                {
+                    OnActivated?.Invoke(this);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error setting state: {e.Message}", this);
             }
         }
 
         protected virtual void UpdateVisuals()
         {
-            if (purchaseVisual != null)
-                purchaseVisual.gameObject.SetActive(_currentState == PurchasableAreaState.Locked);
+            try
+            {
+                if (purchaseVisual != null)
+                    purchaseVisual.gameObject.SetActive(_currentState == PurchasableAreaState.Locked);
 
-            if (activeVisual != null)
-                activeVisual.gameObject.SetActive(_currentState == PurchasableAreaState.Active);
+                if (activeVisual != null)
+                    activeVisual.gameObject.SetActive(_currentState == PurchasableAreaState.Active);
 
-            if (areaCanvas != null)
-                areaCanvas.gameObject.SetActive(_currentState == PurchasableAreaState.Locked);
+                if (areaCanvas != null)
+                    areaCanvas.gameObject.SetActive(_currentState == PurchasableAreaState.Locked);
 
-            if (costText != null && areaData != null)
-                costText.text = $"${areaData.PurchaseCost}";
+                // Use cached string instead of creating new one
+                if (costText != null && _costTextDirty && !string.IsNullOrEmpty(_cachedCostText))
+                {
+                    costText.text = _cachedCostText;
+                    _costTextDirty = false;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error updating visuals: {e.Message}", this);
+            }
+        }
+
+        // ==================== CLEANUP ====================
+
+        private void CleanupPurchaseVisualTween()
+        {
+            if (_purchaseVisualTween != null && _purchaseVisualTween.IsActive())
+            {
+                _purchaseVisualTween.Kill();
+                _activeTweens.Remove(_purchaseVisualTween);
+                _purchaseVisualTween = null;
+            }
+        }
+
+        private void CleanupActivationTween()
+        {
+            if (_activationTween != null && _activationTween.IsActive())
+            {
+                _activationTween.Kill();
+                _activeTweens.Remove(_activationTween);
+                _activationTween = null;
+            }
+        }
+
+        private void CleanupAllTweens()
+        {
+            try
+            {
+                foreach (var tween in _activeTweens)
+                {
+                    if (tween != null && tween.IsActive())
+                    {
+                        tween.Kill();
+                    }
+                }
+                _activeTweens.Clear();
+
+                CleanupPurchaseVisualTween();
+                CleanupActivationTween();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error cleaning up tweens: {e.Message}");
+            }
+        }
+
+        protected virtual void OnDestroy()
+        {
+            CleanupAllTweens();
+        }
+
+        void OnDisable()
+        {
+            CleanupAllTweens();
         }
     }
 

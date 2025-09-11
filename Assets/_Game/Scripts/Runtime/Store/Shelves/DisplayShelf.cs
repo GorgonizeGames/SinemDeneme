@@ -8,6 +8,7 @@ using Game.Runtime.Character;
 using Game.Runtime.Character.Components;
 using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Character.AI;
+using Game.Runtime.Core.Extensions;
 using DG.Tweening;
 
 namespace Game.Runtime.Store.Shelves
@@ -33,6 +34,13 @@ namespace Game.Runtime.Store.Shelves
         private List<Item> _displayedItems = new List<Item>();
         private Dictionary<Transform, Item> _slotItemMap = new Dictionary<Transform, Item>();
 
+        // Performance optimizations - cached components and reusable collections
+        private readonly Dictionary<BaseCharacterController, ICarryingController> _cachedCarryControllers =
+            new Dictionary<BaseCharacterController, ICarryingController>();
+        private readonly List<Item> _tempItemList = new List<Item>();
+        private readonly List<Tween> _activeTweens = new List<Tween>();
+        private Tween _interactionTween;
+
         // Events
         public System.Action<Item> OnItemStocked;
         public System.Action<Item> OnItemPurchased;
@@ -53,14 +61,21 @@ namespace Game.Runtime.Store.Shelves
 
         private void InitializeSlots()
         {
-            _slotItemMap.Clear();
-            if (displaySlots != null)
+            try
             {
-                foreach (var slot in displaySlots)
+                _slotItemMap.Clear();
+                if (displaySlots != null)
                 {
-                    if (slot != null)
-                        _slotItemMap[slot] = null;
+                    foreach (var slot in displaySlots)
+                    {
+                        if (slot != null)
+                            _slotItemMap[slot] = null;
+                    }
                 }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error initializing slots: {e.Message}", this);
             }
         }
 
@@ -70,58 +85,132 @@ namespace Game.Runtime.Store.Shelves
         {
             if (interactor?.Character == null) return false;
 
-            var controller = interactor as InteractionController;
-            if (controller == null) return false;
+            try
+            {
+                var controller = interactor as InteractionController;
+                if (controller == null) return false;
 
-            var character = interactor.Character;
+                var character = interactor.Character;
 
-            return IsEmployeeOrPlayer(character) 
-                ? CanEmployeeInteract(controller, character)
-                : IsCustomer(character) && CanCustomerInteract(controller);
+                return IsEmployeeOrPlayer(character)
+                    ? CanEmployeeInteract(controller, character)
+                    : IsCustomer(character) && CanCustomerInteract(controller);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error checking interaction capability: {e.Message}", this);
+                return false;
+            }
         }
 
         private bool CanEmployeeInteract(InteractionController controller, BaseCharacterController character)
         {
-            // For stocking: need items, correct type, shelf not full
-            if (!controller.HasItemsInHand() || IsFull) return false;
+            try
+            {
+                // For stocking: need items, correct type, shelf not full
+                if (!controller.HasItemsInHand() || IsFull) return false;
 
-            var carryController = character.GetComponentInChildren<StackingCarryController>();
-            if (carryController == null || shelfData == null) return false;
+                var carryController = GetCachedCarryController(character);
+                if (carryController == null || shelfData == null) return false;
 
-            return carryController.CurrentItemType == shelfData.AcceptedItemType;
+                return carryController.CurrentItemType() == shelfData.AcceptedItemType;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error checking employee interaction: {e.Message}", this);
+                return false;
+            }
         }
 
         private bool CanCustomerInteract(InteractionController controller)
         {
-            // For purchasing: shelf has items, customer can carry
-            return !IsEmpty && controller.CanCarryMore();
+            try
+            {
+                // For purchasing: shelf has items, customer can carry
+                return !IsEmpty && controller.CanCarryMore();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error checking customer interaction: {e.Message}", this);
+                return false;
+            }
+        }
+
+        // Cache carry controllers to avoid repeated GetComponent calls
+        private ICarryingController GetCachedCarryController(BaseCharacterController character)
+        {
+            if (character == null) return null;
+
+            if (!_cachedCarryControllers.TryGetValue(character, out var carryController))
+            {
+                carryController = character.CarryingController;
+                if (carryController != null)
+                {
+                    _cachedCarryControllers[character] = carryController;
+                }
+            }
+
+            return carryController;
         }
 
         protected override void OnActiveInteractionStart(IInteractor interactor)
         {
-            // Visual feedback
-            transform.DOScale(Vector3.one * interactionScaleAmount, interactionScaleDuration);
+            try
+            {
+                // Clean up previous interaction tween
+                CleanupInteractionTween();
+
+                _interactionTween = transform.DOScale(Vector3.one * interactionScaleAmount, interactionScaleDuration);
+                if (_interactionTween != null)
+                {
+                    _activeTweens.Add(_interactionTween);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error starting shelf interaction: {e.Message}", this);
+            }
         }
 
         protected override void OnActiveInteractionContinue(IInteractor interactor)
         {
             if (interactor?.Character == null) return;
 
-            var character = interactor.Character;
+            try
+            {
+                var character = interactor.Character;
 
-            if (IsEmployeeOrPlayer(character))
-            {
-                TryStockItem(interactor);
+                if (IsEmployeeOrPlayer(character))
+                {
+                    TryStockItem(interactor);
+                }
+                else if (IsCustomer(character))
+                {
+                    TryTakeItem(interactor);
+                }
             }
-            else if (IsCustomer(character))
+            catch (System.Exception e)
             {
-                TryTakeItem(interactor);
+                Debug.LogError($"Error during shelf interaction: {e.Message}", this);
             }
         }
 
         protected override void OnActiveInteractionEnd(IInteractor interactor)
         {
-            transform.DOScale(Vector3.one, interactionScaleDuration);
+            try
+            {
+                CleanupInteractionTween();
+
+                _interactionTween = transform.DOScale(Vector3.one, interactionScaleDuration);
+                if (_interactionTween != null)
+                {
+                    _activeTweens.Add(_interactionTween);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error ending shelf interaction: {e.Message}", this);
+            }
         }
 
         // ==================== STOCKING ====================
@@ -130,14 +219,21 @@ namespace Game.Runtime.Store.Shelves
         {
             if (IsFull || interactor?.Character == null || shelfData == null) return;
 
-            var carryController = interactor.Character.GetComponentInChildren<StackingCarryController>();
-            if (carryController != null && carryController.CurrentItemType == shelfData.AcceptedItemType)
+            try
             {
-                Item item = carryController.RemoveTopItem();
-                if (item != null)
+                var carryController = GetCachedCarryController(interactor.Character);
+                if (carryController != null && carryController.CurrentItemType() == shelfData.AcceptedItemType)
                 {
-                    PlaceItemOnShelf(item);
+                    Item item = carryController.RemoveTopItem();
+                    if (item != null)
+                    {
+                        PlaceItemOnShelf(item);
+                    }
                 }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error stocking item: {e.Message}", this);
             }
         }
 
@@ -145,19 +241,30 @@ namespace Game.Runtime.Store.Shelves
         {
             if (item == null) return;
 
-            Transform slot = GetEmptySlot();
-            if (slot != null)
+            try
             {
-                item.OnPlacedOnShelf(slot);
+                Transform slot = GetEmptySlot();
+                if (slot != null)
+                {
+                    item.OnPlacedOnShelf(slot);
 
-                // Animate placement
-                item.transform.DOScale(0f, 0f);
-                item.transform.DOScale(1f, stockAnimationDuration).SetEase(Ease.OutBack);
+                    // Animate placement with proper tween tracking
+                    item.transform.localScale = Vector3.zero;
+                    Tween placementTween = item.transform.DOScale(1f, stockAnimationDuration).SetEase(Ease.OutBack);
+                    if (placementTween != null)
+                    {
+                        _activeTweens.Add(placementTween);
+                    }
 
-                _slotItemMap[slot] = item;
-                _displayedItems.Add(item);
+                    _slotItemMap[slot] = item;
+                    _displayedItems.Add(item);
 
-                OnItemStocked?.Invoke(item);
+                    OnItemStocked?.Invoke(item);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error placing item on shelf: {e.Message}", this);
             }
         }
 
@@ -167,15 +274,22 @@ namespace Game.Runtime.Store.Shelves
         {
             if (IsEmpty || interactor?.Character == null) return;
 
-            var carryController = interactor.Character.GetComponentInChildren<StackingCarryController>();
-            if (carryController != null && !carryController.IsFull)
+            try
             {
-                Item item = GetLastItem();
-                if (item != null && carryController.TryPickupItem(item))
+                var carryController = GetCachedCarryController(interactor.Character);
+                if (carryController != null && !carryController.IsFull())
                 {
-                    RemoveItemFromShelf(item);
-                    OnItemPurchased?.Invoke(item);
+                    Item item = GetLastItem();
+                    if (item != null && carryController.TryPickupItem(item))
+                    {
+                        RemoveItemFromShelf(item);
+                        OnItemPurchased?.Invoke(item);
+                    }
                 }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error taking item: {e.Message}", this);
             }
         }
 
@@ -183,21 +297,28 @@ namespace Game.Runtime.Store.Shelves
         {
             if (item == null) return;
 
-            // Find and clear slot
-            foreach (var kvp in _slotItemMap)
+            try
             {
-                if (kvp.Value == item)
+                // Find and clear slot
+                foreach (var kvp in _slotItemMap)
                 {
-                    _slotItemMap[kvp.Key] = null;
-                    break;
+                    if (kvp.Value == item)
+                    {
+                        _slotItemMap[kvp.Key] = null;
+                        break;
+                    }
+                }
+
+                _displayedItems.Remove(item);
+
+                if (autoArrange)
+                {
+                    RearrangeItems();
                 }
             }
-
-            _displayedItems.Remove(item);
-
-            if (autoArrange)
+            catch (System.Exception e)
             {
-                RearrangeItems();
+                Debug.LogError($"Error removing item from shelf: {e.Message}", this);
             }
         }
 
@@ -205,9 +326,11 @@ namespace Game.Runtime.Store.Shelves
 
         private Transform GetEmptySlot()
         {
+            if (_slotItemMap == null) return null;
+
             foreach (var kvp in _slotItemMap)
             {
-                if (kvp.Value == null)
+                if (kvp.Value == null && kvp.Key != null)
                     return kvp.Key;
             }
             return null;
@@ -222,23 +345,38 @@ namespace Game.Runtime.Store.Shelves
         {
             if (displaySlots == null) return;
 
-            // Compact items to fill gaps
-            var items = new List<Item>(_displayedItems);
-            InitializeSlots();
-
-            int index = 0;
-            foreach (var item in items)
+            try
             {
-                if (item != null && index < displaySlots.Length)
+                // Use temp list to avoid allocation
+                _tempItemList.Clear();
+                _tempItemList.AddRange(_displayedItems);
+
+                InitializeSlots();
+
+                int index = 0;
+                foreach (var item in _tempItemList)
                 {
-                    Transform slot = displaySlots[index];
-                    if (slot != null)
+                    if (item != null && index < displaySlots.Length)
                     {
-                        item.transform.DOMove(slot.position, rearrangeAnimationDuration);
-                        _slotItemMap[slot] = item;
+                        Transform slot = displaySlots[index];
+                        if (slot != null)
+                        {
+                            Tween moveTween = item.transform.DOMove(slot.position, rearrangeAnimationDuration);
+                            if (moveTween != null)
+                            {
+                                _activeTweens.Add(moveTween);
+                            }
+                            _slotItemMap[slot] = item;
+                        }
+                        index++;
                     }
-                    index++;
                 }
+
+                _tempItemList.Clear();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error rearranging items: {e.Message}", this);
             }
         }
 
@@ -247,13 +385,13 @@ namespace Game.Runtime.Store.Shelves
             if (character is PlayerCharacterController) return true;
 
             var aiController = character as AICharacterController;
-            return aiController != null && aiController.Data.CharacterType == CharacterType.AI_Employee;
+            return aiController != null && aiController.Data?.CharacterType == CharacterType.AI_Employee;
         }
 
         private bool IsCustomer(BaseCharacterController character)
         {
             var aiController = character as AICharacterController;
-            return aiController != null && aiController.Data.CharacterType == CharacterType.AI_Customer;
+            return aiController != null && aiController.Data?.CharacterType == CharacterType.AI_Customer;
         }
 
         public Transform GetCustomerBrowsePoint()
@@ -263,6 +401,51 @@ namespace Game.Runtime.Store.Shelves
                 return customerBrowsePoints[Random.Range(0, customerBrowsePoints.Length)];
             }
             return transform;
+        }
+
+        // ==================== CLEANUP ====================
+
+        private void CleanupInteractionTween()
+        {
+            if (_interactionTween != null && _interactionTween.IsActive())
+            {
+                _interactionTween.Kill();
+                _activeTweens.Remove(_interactionTween);
+                _interactionTween = null;
+            }
+        }
+
+        private void CleanupAllTweens()
+        {
+            try
+            {
+                foreach (var tween in _activeTweens)
+                {
+                    if (tween != null && tween.IsActive())
+                    {
+                        tween.Kill();
+                    }
+                }
+                _activeTweens.Clear();
+
+                CleanupInteractionTween();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error cleaning up shelf tweens: {e.Message}");
+            }
+        }
+
+        protected override void OnDestroy()
+        {
+            CleanupAllTweens();
+            _cachedCarryControllers.Clear();
+            base.OnDestroy();
+        }
+
+        void OnDisable()
+        {
+            CleanupAllTweens();
         }
     }
 }

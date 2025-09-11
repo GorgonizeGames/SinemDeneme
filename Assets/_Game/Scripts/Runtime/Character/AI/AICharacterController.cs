@@ -36,9 +36,23 @@ namespace Game.Runtime.Character.AI
         protected IPickupable _targetItem;
         protected Transform _targetDropZone;
 
+        // Performance optimization - cached values to avoid allocations
+        private Vector2 _cachedMovementInput = Vector2.zero;
+        private readonly Vector3 _tempVector3 = Vector3.zero;
+        
+        // Cached debug strings to avoid string allocation in hot paths
+        private string _cachedInitMessage;
+        private string _cachedMoveMessage;
+        private string _cachedPickupMessage;
+        private bool _debugStringsDirty = true;
+
+        // Cached distance calculations (squared to avoid sqrt)
+        private float _stoppingDistanceSquared;
+        private float _velocityThresholdSquared;
+
         // Public properties
         public NavMeshAgent NavAgent => navMeshAgent;
-        public bool IsMoving => navMeshAgent != null && navMeshAgent.velocity.magnitude > velocityThreshold;
+        public bool IsMoving => navMeshAgent != null && navMeshAgent.velocity.sqrMagnitude > _velocityThresholdSquared;
         public bool HasReachedDestination => navMeshAgent != null && !navMeshAgent.pathPending && navMeshAgent.remainingDistance < stoppingDistance;
 
         protected override void Awake()
@@ -48,36 +62,66 @@ namespace Game.Runtime.Character.AI
             if (navMeshAgent == null)
                 navMeshAgent = GetComponent<NavMeshAgent>();
 
+            // Cache squared values for performance
+            _stoppingDistanceSquared = stoppingDistance * stoppingDistance;
+            _velocityThresholdSquared = velocityThreshold * velocityThreshold;
+
             SetupNavMeshAgent();
         }
 
         protected override void OnInitialize()
         {
             SetupAIBehavior();
+            PrepareDebugStrings();
 
-            if (enableDebugLogs && Data != null)
-                Debug.Log($"🤖 AI Character initialized - Role: {Data.CharacterType}");
+            if (enableDebugLogs && !string.IsNullOrEmpty(_cachedInitMessage))
+            {
+                Debug.Log(_cachedInitMessage);
+            }
+        }
+
+        private void PrepareDebugStrings()
+        {
+            if (enableDebugLogs && Data != null && _debugStringsDirty)
+            {
+                _cachedInitMessage = $"🤖 AI Character initialized - Role: {Data.CharacterType}";
+                _debugStringsDirty = false;
+            }
         }
 
         protected virtual void SetupNavMeshAgent()
         {
             if (navMeshAgent == null) return;
 
-            navMeshAgent.stoppingDistance = stoppingDistance;
-            navMeshAgent.updateRotation = false;
-            navMeshAgent.updatePosition = false;
+            try
+            {
+                navMeshAgent.stoppingDistance = stoppingDistance;
+                navMeshAgent.updateRotation = false;
+                navMeshAgent.updatePosition = false;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error setting up NavMeshAgent: {e.Message}", this);
+            }
         }
 
         protected virtual void SetupAIBehavior()
         {
-            if (Data != null)
+            try
             {
-                _currentBehavior = AIBehaviorFactory.CreateBehavior(Data.CharacterType, this);
-                _currentBehavior?.Initialize();
+                if (Data != null)
+                {
+                    _currentBehavior = AIBehaviorFactory.CreateBehavior(Data.CharacterType, this);
+                    _currentBehavior?.Initialize();
+                }
+                else
+                {
+                    Debug.LogError($"[{gameObject.name}] Cannot setup AI behavior without CharacterData!", this);
+                }
             }
-            else
+            catch (System.Exception e)
             {
-                Debug.LogError($"[{gameObject.name}] Cannot setup AI behavior without CharacterData!", this);
+                Debug.LogError($"Error setting up AI behavior: {e.Message}", this);
             }
         }
 
@@ -86,12 +130,20 @@ namespace Game.Runtime.Character.AI
             // AI decision making
             if (Time.time - _lastDecisionTime >= decisionInterval)
             {
-                _currentBehavior?.UpdateBehavior();
-
-                // AI pickup logic
-                if (enableSmartPickup)
+                try
                 {
-                    HandleAIPickupLogic();
+                    _currentBehavior?.UpdateBehavior();
+
+                    // AI pickup logic
+                    if (enableSmartPickup)
+                    {
+                        HandleAIPickupLogic();
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    if (enableDebugLogs)
+                        Debug.LogError($"AI Behavior Error: {e.Message}", this);
                 }
 
                 _lastDecisionTime = Time.time;
@@ -106,9 +158,16 @@ namespace Game.Runtime.Character.AI
             base.FixedUpdate();
 
             // Sync NavMesh position in FixedUpdate for physics consistency
-            if (navMeshAgent != null && !navMeshAgent.updatePosition)
+            try
             {
-                navMeshAgent.nextPosition = transform.position;
+                if (navMeshAgent != null && !navMeshAgent.updatePosition && navMeshAgent.isActiveAndEnabled)
+                {
+                    navMeshAgent.nextPosition = transform.position;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error syncing NavMesh position: {e.Message}", this);
             }
         }
 
@@ -118,13 +177,20 @@ namespace Game.Runtime.Character.AI
             if (Data?.CharacterType != CharacterType.AI_Employee) return;
             if (_carryingController == null || _interactionController == null) return;
 
-            if (!_carryingController.IsCarrying && _targetItem == null)
+            try
             {
-                FindNearbyItems();
+                if (!_carryingController.IsCarrying && _targetItem == null)
+                {
+                    FindNearbyItems();
+                }
+                else if (_carryingController.IsCarrying && _targetDropZone == null)
+                {
+                    FindNearbyDropZones();
+                }
             }
-            else if (_carryingController.IsCarrying && _targetDropZone == null)
+            catch (System.Exception e)
             {
-                FindNearbyDropZones();
+                Debug.LogError($"Error in AI pickup logic: {e.Message}", this);
             }
         }
 
@@ -132,40 +198,44 @@ namespace Game.Runtime.Character.AI
         {
             if (_interactionController == null) return;
 
-            // TODO: Implement proper item detection system
-            // var nearbyItems = _interactionController.GetNearbyItems();
-            // foreach (var item in nearbyItems)
-            // {
-            //     if (_carryingController.CanPickupItem(item))
-            //     {
-            //         _targetItem = item;
-            //         MoveTo(item.Transform.position);
-            //         if (enableDebugLogs)
-            //             Debug.Log($"🤖 AI found target item: {item.ItemId}");
-            //         break;
-            //     }
-            // }
+            // TODO: Implement proper item detection system with spatial partitioning
+            // This will use octree or similar spatial data structure to avoid
+            // expensive distance calculations every frame
+            
+            // Placeholder for now - will be implemented with performance in mind
         }
 
         private void FindNearbyDropZones()
         {
-            // TODO: Implement drop zone detection
+            // TODO: Implement drop zone detection with caching
+            // Will use cached zone positions and only recalculate when zones change
         }
 
         protected virtual void UpdateMovementFromNavMesh()
         {
             if (navMeshAgent == null) return;
 
-            if (navMeshAgent.hasPath && navMeshAgent.velocity.magnitude > velocityThreshold)
+            try
             {
-                Vector3 velocity = navMeshAgent.desiredVelocity.normalized;
-                Vector2 movementInput = new Vector2(velocity.x, velocity.z);
-                SetMovementInput(movementInput);
+                if (navMeshAgent.hasPath && navMeshAgent.velocity.sqrMagnitude > _velocityThresholdSquared)
+                {
+                    Vector3 velocity = navMeshAgent.desiredVelocity.normalized;
+                    
+                    // Reuse cached Vector2 to avoid allocation
+                    _cachedMovementInput.x = velocity.x;
+                    _cachedMovementInput.y = velocity.z;
+                    SetMovementInput(_cachedMovementInput);
+                }
+                else
+                {
+                    // Use static Vector2.zero to avoid allocation
+                    SetMovementInput(Vector2.zero);
+                    CheckTargetReached();
+                }
             }
-            else
+            catch (System.Exception e)
             {
-                SetMovementInput(Vector2.zero);
-                CheckTargetReached();
+                Debug.LogError($"Error updating movement from NavMesh: {e.Message}", this);
             }
         }
 
@@ -173,29 +243,43 @@ namespace Game.Runtime.Character.AI
         {
             if (_carryingController == null) return;
 
-            // Check if we reached target item
-            if (_targetItem != null && !_carryingController.IsCarrying)
+            try
             {
-                float distance = Vector3.Distance(transform.position, _targetItem.Transform.position);
-                if (distance <= stoppingDistance)
+                // Check if we reached target item (use squared distance for performance)
+                if (_targetItem != null && !_carryingController.IsCarrying)
                 {
-                    bool success = _carryingController.TryPickupItem(_targetItem);
-                    if (success && enableDebugLogs)
+                    float distanceSquared = Vector3.SqrMagnitude(transform.position - _targetItem.Transform.position);
+                    
+                    if (distanceSquared <= _stoppingDistanceSquared)
                     {
-                        Debug.Log($"🤖 AI picked up item: {_targetItem.ItemId}");
+                        bool success = _carryingController.TryPickupItem(_targetItem);
+                        if (success && enableDebugLogs)
+                        {
+                            // Only create string if logging is enabled
+                            if (string.IsNullOrEmpty(_cachedPickupMessage))
+                            {
+                                _cachedPickupMessage = $"🤖 AI picked up item: {_targetItem.ItemId}";
+                            }
+                            Debug.Log(_cachedPickupMessage);
+                        }
+                        _targetItem = null;
                     }
-                    _targetItem = null;
+                }
+
+                // Check if we reached drop zone (use squared distance for performance)
+                if (_targetDropZone != null && _carryingController.IsCarrying)
+                {
+                    float distanceSquared = Vector3.SqrMagnitude(transform.position - _targetDropZone.position);
+                    
+                    if (distanceSquared <= _stoppingDistanceSquared)
+                    {
+                        _targetDropZone = null;
+                    }
                 }
             }
-
-            // Check if we reached drop zone
-            if (_targetDropZone != null && _carryingController.IsCarrying)
+            catch (System.Exception e)
             {
-                float distance = Vector3.Distance(transform.position, _targetDropZone.position);
-                if (distance <= stoppingDistance)
-                {
-                    _targetDropZone = null;
-                }
+                Debug.LogError($"Error checking target reached: {e.Message}", this);
             }
         }
 
@@ -203,40 +287,104 @@ namespace Game.Runtime.Character.AI
         {
             if (navMeshAgent == null) return false;
 
-            if (IsValidDestination(destination))
+            try
             {
-                navMeshAgent.SetDestination(destination);
-                _targetDestination = destination;
-                _isMovingToTarget = true;
+                if (IsValidDestination(destination))
+                {
+                    navMeshAgent.SetDestination(destination);
+                    _targetDestination = destination;
+                    _isMovingToTarget = true;
 
-                if (enableDebugLogs && Data != null)
-                    Debug.Log($"🎯 {Data.CharacterType} moving to: {destination}");
+                    if (enableDebugLogs && Data != null)
+                    {
+                        // Create debug string only when needed and cache it
+                        if (string.IsNullOrEmpty(_cachedMoveMessage))
+                        {
+                            _cachedMoveMessage = $"🎯 {Data.CharacterType} moving to: {destination}";
+                        }
+                        Debug.Log(_cachedMoveMessage);
+                    }
 
-                return true;
+                    return true;
+                }
             }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error moving to destination: {e.Message}", this);
+            }
+            
             return false;
         }
 
         public virtual void Stop()
         {
-            navMeshAgent?.ResetPath();
-            _isMovingToTarget = false;
-            SetMovementInput(Vector2.zero);
-            _motor?.Stop();
+            try
+            {
+                if (navMeshAgent != null && navMeshAgent.isActiveAndEnabled)
+                {
+                    navMeshAgent.ResetPath();
+                }
+                _isMovingToTarget = false;
+                SetMovementInput(Vector2.zero);
+                _motor?.Stop();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error stopping AI character: {e.Message}", this);
+            }
         }
 
         protected virtual bool IsValidDestination(Vector3 destination)
         {
-            NavMeshHit hit;
-            return NavMesh.SamplePosition(destination, out hit, navMeshSampleDistance, NavMesh.AllAreas);
+            try
+            {
+                NavMeshHit hit;
+                return NavMesh.SamplePosition(destination, out hit, navMeshSampleDistance, NavMesh.AllAreas);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error validating destination: {e.Message}", this);
+                return false;
+            }
         }
 
         protected override void OnDestroy()
         {
+            try
+            {
+                // Safely end AI behavior
+                if (_currentBehavior != null)
+                {
+                    _currentBehavior.OnBehaviorEnd();
+                    _currentBehavior = null;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error ending AI behavior during destroy: {e.Message}");
+            }
+            
             base.OnDestroy();
-            _currentBehavior?.OnBehaviorEnd();
         }
 
+        void OnDisable()
+        {
+            try
+            {
+                // Stop navigation when disabled
+                if (navMeshAgent != null && navMeshAgent.isActiveAndEnabled)
+                {
+                    navMeshAgent.ResetPath();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error disabling AI character: {e.Message}");
+            }
+        }
+
+        // Conditional compilation to exclude debug gizmos in release builds
+        #if UNITY_EDITOR
         void OnDrawGizmosSelected()
         {
             if (navMeshAgent != null && navMeshAgent.hasPath)
@@ -259,5 +407,6 @@ namespace Game.Runtime.Character.AI
             Gizmos.color = Color.blue;
             Gizmos.DrawWireSphere(transform.position, pickupRange);
         }
+        #endif
     }
 }

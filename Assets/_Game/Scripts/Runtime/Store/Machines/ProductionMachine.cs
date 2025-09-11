@@ -10,6 +10,7 @@ using Game.Runtime.Character.Components;
 using Game.Runtime.Core.DI;
 using DG.Tweening;
 using Game.Runtime.Items.Services;
+using Game.Runtime.Core.Extensions;
 
 namespace Game.Runtime.Store.Machines
 {
@@ -47,6 +48,15 @@ namespace Game.Runtime.Store.Machines
         private bool _isProducing = false;
         private int _currentSlotIndex = 0;
 
+        // Performance optimizations - resource management
+        private readonly List<Tween> _activeTweens = new List<Tween>();
+        private readonly List<Transform> _activeGearAnimations = new List<Transform>();
+        private Tween _interactionTween;
+
+        // Cached strings for performance
+        private string _cachedCostText;
+        private bool _costTextDirty = true;
+
         // Events
         public System.Action<Item> OnItemProduced;
         public System.Action<Item> OnItemCollected;
@@ -57,9 +67,31 @@ namespace Game.Runtime.Store.Machines
             interactionType = InteractionType.Machine;
             interactionPriority = InteractionPriority.High;
 
+            PrepareCachedStrings();
+
             if (IsActive)
             {
                 StartProduction();
+            }
+        }
+
+        private void PrepareCachedStrings()
+        {
+            if (areaData != null)
+            {
+                _cachedCostText = $"${areaData.PurchaseCost}";
+            }
+        }
+
+        protected override void UpdateVisuals()
+        {
+            base.UpdateVisuals();
+
+            // Use cached string instead of creating new one every time
+            if (costText != null && _costTextDirty)
+            {
+                costText.text = _cachedCostText;
+                _costTextDirty = false;
             }
         }
 
@@ -81,8 +113,8 @@ namespace Game.Runtime.Store.Machines
             // Elinde farklı tip item varsa alamaz
             if (controller.HasItemsInHand())
             {
-                var carryController = interactor.Character.GetComponentInChildren<StackingCarryController>();
-                if (carryController != null && carryController.CurrentItemType != machineData.ProducedItemType)
+                var carryController = controller.GetCachedCarryController();
+                if (carryController != null && carryController.CurrentItemType() != machineData.ProducedItemType)
                 {
                     return false;
                 }
@@ -93,9 +125,14 @@ namespace Game.Runtime.Store.Machines
 
         protected override void OnActiveInteractionStart(IInteractor interactor)
         {
-            // Visual feedback
-            DOTween.Kill(transform);
-            transform.DOScale(Vector3.one * interactionScaleAmount, interactionScaleDuration);
+            // Clean up previous tween to prevent leaks
+            CleanupInteractionTween();
+
+            _interactionTween = transform.DOScale(Vector3.one * interactionScaleAmount, interactionScaleDuration);
+            if (_interactionTween != null)
+            {
+                _activeTweens.Add(_interactionTween);
+            }
         }
 
         protected override void OnActiveInteractionContinue(IInteractor interactor)
@@ -105,8 +142,23 @@ namespace Game.Runtime.Store.Machines
 
         protected override void OnActiveInteractionEnd(IInteractor interactor)
         {
-            // Reset visual
-            transform.DOScale(Vector3.one, interactionScaleDuration);
+            CleanupInteractionTween();
+
+            _interactionTween = transform.DOScale(Vector3.one, interactionScaleDuration);
+            if (_interactionTween != null)
+            {
+                _activeTweens.Add(_interactionTween);
+            }
+        }
+
+        private void CleanupInteractionTween()
+        {
+            if (_interactionTween != null && _interactionTween.IsActive())
+            {
+                _interactionTween.Kill();
+                _activeTweens.Remove(_interactionTween);
+                _interactionTween = null;
+            }
         }
 
         protected override void CompletePurchase()
@@ -122,6 +174,12 @@ namespace Game.Runtime.Store.Machines
             if (!IsActive || _isProducing || machineData == null) return;
 
             _isProducing = true;
+
+            if (_productionCoroutine != null)
+            {
+                StopCoroutine(_productionCoroutine);
+            }
+
             _productionCoroutine = StartCoroutine(ProductionCycle());
         }
 
@@ -129,13 +187,19 @@ namespace Game.Runtime.Store.Machines
         {
             _isProducing = false;
 
+            // Safe coroutine cleanup
             if (_productionCoroutine != null)
             {
                 StopCoroutine(_productionCoroutine);
                 _productionCoroutine = null;
             }
 
-            // Stop visual effects
+            // Stop visual effects safely
+            StopAllVisualEffects();
+        }
+
+        private void StopAllVisualEffects()
+        {
             AnimateGears(false);
             SetConveyorMovement(false);
         }
@@ -168,7 +232,7 @@ namespace Game.Runtime.Store.Machines
             float halfProductionTime = machineData.ProductionInterval * 0.5f;
             yield return new WaitForSeconds(halfProductionTime);
 
-            // Spawn item
+            // Spawn item with null checks
             Item item = _itemPool.GetItem(machineData.ProducedItemType);
             if (item != null && productionPoint != null)
             {
@@ -178,20 +242,28 @@ namespace Game.Runtime.Store.Machines
                 // Find available slot
                 Transform targetSlot = GetAvailableSlot();
 
-                // Animate to output
+                // Animate to output with proper cleanup handling
                 if (targetSlot != null)
                 {
-                    item.transform.DOMove(targetSlot.position, itemMoveAnimationDuration)
+                    Tween moveTween = item.transform.DOMove(targetSlot.position, itemMoveAnimationDuration)
                         .SetEase(Ease.OutQuad)
                         .OnComplete(() =>
                         {
-                            _producedItems.Enqueue(item);
+                            if (item != null && this != null) // Null check for safety
+                            {
+                                _producedItems.Enqueue(item);
 
-                            if (productionVFX != null)
-                                productionVFX.Play();
+                                if (productionVFX != null)
+                                    productionVFX.Play();
 
-                            OnItemProduced?.Invoke(item);
+                                OnItemProduced?.Invoke(item);
+                            }
                         });
+
+                    if (moveTween != null)
+                    {
+                        _activeTweens.Add(moveTween);
+                    }
                 }
                 else
                 {
@@ -203,23 +275,30 @@ namespace Game.Runtime.Store.Machines
             yield return new WaitForSeconds(productionVisualDelay);
 
             // Stop visual feedback
-            AnimateGears(false);
-            SetConveyorMovement(false);
+            StopAllVisualEffects();
         }
 
         private void TryGiveItem(IInteractor interactor)
         {
             if (_producedItems.Count == 0 || interactor?.Character == null) return;
 
-            var carryController = interactor.Character.GetComponentInChildren<StackingCarryController>();
-            if (carryController != null && !carryController.IsFull)
+            var controller = interactor as InteractionController;
+            var carryController = controller?.GetCachedCarryController();
+
+            if (carryController != null && !carryController.IsFull())
             {
-                Item item = _producedItems.Peek();
+                // Safe peek operation
+                Item item = null;
+                if (_producedItems.Count > 0)
+                {
+                    item = _producedItems.Peek();
+                }
+
                 if (item == null) return;
 
-                // Item tipi kontrolü
-                if (carryController.CurrentItemType != ItemType.None &&
-                    carryController.CurrentItemType != item.ItemType)
+                // Item type check
+                if (carryController.CurrentItemType() != ItemType.None &&
+                    carryController.CurrentItemType() != item.ItemType)
                 {
                     return;
                 }
@@ -238,22 +317,36 @@ namespace Game.Runtime.Store.Machines
         {
             if (gears == null) return;
 
-            foreach (var gear in gears)
+            if (animate)
             {
-                if (gear != null)
+                foreach (var gear in gears)
                 {
-                    if (animate)
+                    if (gear != null && !_activeGearAnimations.Contains(gear))
                     {
-                        float rotationDuration = 2f; // 360 derece 2 saniyede
-                        gear.DORotate(new Vector3(0, 360, 0), rotationDuration, RotateMode.LocalAxisAdd)
+                        float rotationDuration = 2f; // 360 degrees in 2 seconds
+                        Tween gearTween = gear.DORotate(new Vector3(0, 360, 0), rotationDuration, RotateMode.LocalAxisAdd)
                             .SetLoops(-1, LoopType.Restart)
                             .SetEase(Ease.Linear);
+
+                        if (gearTween != null)
+                        {
+                            _activeTweens.Add(gearTween);
+                            _activeGearAnimations.Add(gear);
+                        }
                     }
-                    else
+                }
+            }
+            else
+            {
+                // Stop all gear animations
+                foreach (var gear in _activeGearAnimations)
+                {
+                    if (gear != null)
                     {
                         DOTween.Kill(gear);
                     }
                 }
+                _activeGearAnimations.Clear();
             }
         }
 
@@ -284,6 +377,47 @@ namespace Game.Runtime.Store.Machines
                 return employeeWaitPoints[0];
             }
             return transform;
+        }
+
+        // ==================== CLEANUP ====================
+
+        private void CleanupAllTweens()
+        {
+            // Clean up all tracked tweens
+            foreach (var tween in _activeTweens)
+            {
+                if (tween != null && tween.IsActive())
+                {
+                    tween.Kill();
+                }
+            }
+            _activeTweens.Clear();
+
+            // Clean up gear animations
+            foreach (var gear in _activeGearAnimations)
+            {
+                if (gear != null)
+                {
+                    DOTween.Kill(gear);
+                }
+            }
+            _activeGearAnimations.Clear();
+
+            // Clean up interaction tween
+            CleanupInteractionTween();
+        }
+
+        protected override void OnDestroy()
+        {
+            StopProduction();
+            CleanupAllTweens();
+            base.OnDestroy();
+        }
+
+        void OnDisable()
+        {
+            StopProduction();
+            CleanupAllTweens();
         }
     }
 }
