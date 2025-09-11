@@ -73,6 +73,8 @@ namespace Game.Runtime.Character.Components
 
         public void StartInteraction(IInteractable interactable)
         {
+            if (interactable == null) return;
+            
             if (!_activeInteractions.ContainsKey(interactable))
             {
                 _activeInteractions.Add(interactable, Time.time);
@@ -82,6 +84,8 @@ namespace Game.Runtime.Character.Components
 
         public void EndInteraction(IInteractable interactable)
         {
+            if (interactable == null) return;
+            
             if (_activeInteractions.ContainsKey(interactable))
             {
                 _activeInteractions.Remove(interactable);
@@ -91,7 +95,7 @@ namespace Game.Runtime.Character.Components
 
         private bool IsValidInteractable(GameObject obj)
         {
-            return ((1 << obj.layer) & interactableLayer) != 0;
+            return obj != null && ((1 << obj.layer) & interactableLayer) != 0;
         }
 
         // Helper methods for stacking system
@@ -107,11 +111,15 @@ namespace Game.Runtime.Character.Components
 
         void OnDestroy()
         {
-            var interactions = new List<IInteractable>(_activeInteractions.Keys);
-            foreach (var interactable in interactions)
+            // Simple cleanup - orijinal yaklaşım
+            foreach (var kvp in _activeInteractions)
             {
-                EndInteraction(interactable);
+                if (kvp.Key != null)
+                {
+                    kvp.Key.OnInteractionEnd(this);
+                }
             }
+            _activeInteractions.Clear();
         }
     }
 }

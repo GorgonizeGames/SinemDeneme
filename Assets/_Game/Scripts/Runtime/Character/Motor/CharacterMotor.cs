@@ -5,19 +5,22 @@ using Game.Runtime.Character.Data;
 
 namespace Game.Runtime.Character.Motor
 {
-    [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
     public class CharacterMotor : MonoBehaviour
     {
         [Header("Character Settings")]
-        [SerializeField] CharacterData data;
+        [SerializeField] private CharacterData data;
+
+        [Header("Movement Thresholds")]
+        [SerializeField] private float movementThreshold = 0.1f;
+        [SerializeField] private float rotationThreshold = 0.1f;
+        
         private Rigidbody _rigidbody;
         private Vector3 _currentVelocity;
         private Vector3 _movementInput;
         private CharacterRuntimeSettings _runtimeSettings;
 
-        public Animator CharacterAnimator { get; private set;}
-
-        public CharacterData Data=> data;
+        public Animator CharacterAnimator { get; private set; }
+        public CharacterData Data => data;
 
         void Awake()
         {
@@ -40,7 +43,12 @@ namespace Game.Runtime.Character.Motor
 
             if (_runtimeSettings != null)
             {
+                // Unity version compatibility for drag property
+#if UNITY_2023_1_OR_NEWER
                 _rigidbody.linearDamping = _runtimeSettings.Drag;
+#else
+                _rigidbody.drag = _runtimeSettings.Drag;
+#endif
 
                 if (_runtimeSettings.FreezeYPosition)
                 {
@@ -56,7 +64,7 @@ namespace Game.Runtime.Character.Motor
 
         public void ExecuteMovement()
         {
-            if (_runtimeSettings == null) return;
+            if (_runtimeSettings == null || _rigidbody == null) return;
 
             Vector3 targetVelocity = _movementInput * _runtimeSettings.EffectiveMoveSpeed;
 
@@ -82,7 +90,7 @@ namespace Game.Runtime.Character.Motor
 
         private void UpdateRotation(Vector3 direction)
         {
-            if (_runtimeSettings == null || direction.magnitude <= 0.1f) return;
+            if (_runtimeSettings == null || _rigidbody == null || direction.magnitude <= rotationThreshold) return;
 
             Quaternion targetRotation = Quaternion.LookRotation(direction);
             Quaternion newRotation = Quaternion.Slerp(
@@ -98,16 +106,21 @@ namespace Game.Runtime.Character.Motor
             if (CharacterAnimator == null || _runtimeSettings == null) return;
 
             float speed = _currentVelocity.magnitude;
-            float normalizedSpeed = speed / _runtimeSettings.EffectiveMoveSpeed;
-            bool isMoving = normalizedSpeed > 0.1f;
+            float normalizedSpeed = _runtimeSettings.EffectiveMoveSpeed > 0 
+                ? speed / _runtimeSettings.EffectiveMoveSpeed 
+                : 0f;
+            bool isMoving = normalizedSpeed > movementThreshold;
 
             // Base Layer - Sadece yürüme ve idle
-            CharacterAnimator.SetFloat(AnimationParameters.Speed, normalizedSpeed * _runtimeSettings.AnimationSpeedMultiplier);
+            CharacterAnimator.SetFloat(AnimationParameters.Speed, 
+                normalizedSpeed * _runtimeSettings.AnimationSpeedMultiplier);
             CharacterAnimator.SetBool(AnimationParameters.IsMoving, isMoving);
         }
 
         public void SetCharacterSettings(CharacterData newSettings)
         {
+            if (newSettings == null) return;
+
             data = newSettings;
             if (_runtimeSettings != null)
             {
@@ -130,7 +143,7 @@ namespace Game.Runtime.Character.Motor
             _runtimeSettings?.ResetSpeedBoost();
         }
 
-        public bool IsMoving => _currentVelocity.magnitude > 0.1f;
+        public bool IsMoving => _currentVelocity.magnitude > movementThreshold;
         public Vector3 CurrentVelocity => _currentVelocity;
     }
 }

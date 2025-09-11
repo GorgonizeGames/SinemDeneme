@@ -15,6 +15,15 @@ namespace Game.Runtime.Store.Areas
         [SerializeField] protected Transform purchaseVisual;
         [SerializeField] protected GameObject activeVisual;
 
+        [Header("Purchase Timing")]
+        [SerializeField] protected float purchaseDuration = 2f;
+
+        [Header("Visual Effects")]
+        [SerializeField] protected float purchaseScaleAmount = 1.1f;
+        [SerializeField] protected float purchaseAnimDuration = 0.3f;
+        [SerializeField] protected float activationScaleDuration = 0.5f;
+        [SerializeField] protected float visualResetDuration = 0.2f;
+
         [Header("UI Elements")]
         [SerializeField] protected Canvas areaCanvas;
         [SerializeField] protected UnityEngine.UI.Image progressBar;
@@ -61,10 +70,10 @@ namespace Game.Runtime.Store.Areas
 
         public virtual bool CanInteract(IInteractor interactor)
         {
-            // Locked state - sadece Player satın alabilir
+            if (interactor?.Character == null) return false;
+
             if (IsLocked)
             {
-                // Sadece Player satın alabilir
                 if (interactor.Character is PlayerCharacterController)
                 {
                     return _economyService != null && _economyService.CanAfford(areaData.PurchaseCost);
@@ -72,7 +81,6 @@ namespace Game.Runtime.Store.Areas
                 return false;
             }
 
-            // Active state - alt sınıflar override edecek
             if (IsActive)
             {
                 return CanInteractWhenActive(interactor);
@@ -83,6 +91,8 @@ namespace Game.Runtime.Store.Areas
 
         public virtual void OnInteractionStart(IInteractor interactor)
         {
+            if (interactor?.Character == null) return;
+
             if (IsLocked && interactor.Character is PlayerCharacterController)
             {
                 StartPurchaseProcess(interactor);
@@ -139,12 +149,16 @@ namespace Game.Runtime.Store.Areas
                 progressBar.transform.parent.gameObject.SetActive(true);
             }
 
-            purchaseVisual?.transform.DOScale(1.1f, 0.3f).SetLoops(-1, LoopType.Yoyo);
+            if (purchaseVisual != null)
+            {
+                purchaseVisual.transform.DOScale(purchaseScaleAmount, purchaseAnimDuration)
+                    .SetLoops(-1, LoopType.Yoyo);
+            }
         }
 
         protected virtual void ContinuePurchaseProcess()
         {
-            _purchaseProgress += Time.deltaTime / 2f; // 2 saniyede tamamlanır
+            _purchaseProgress += Time.deltaTime / purchaseDuration;
 
             if (progressBar != null)
                 progressBar.fillAmount = _purchaseProgress;
@@ -168,13 +182,16 @@ namespace Game.Runtime.Store.Areas
                 progressBar.transform.parent.gameObject.SetActive(false);
             }
 
-            DOTween.Kill(purchaseVisual);
-            purchaseVisual?.transform.DOScale(1f, 0.2f);
+            if (purchaseVisual != null)
+            {
+                DOTween.Kill(purchaseVisual);
+                purchaseVisual.transform.DOScale(1f, visualResetDuration);
+            }
         }
 
         protected virtual void CompletePurchase()
         {
-            if (_economyService.TrySpend(areaData.PurchaseCost))
+            if (_economyService != null && _economyService.TrySpend(areaData.PurchaseCost))
             {
                 SetState(PurchasableAreaState.Active);
                 OnPurchased?.Invoke(this);
@@ -183,10 +200,13 @@ namespace Game.Runtime.Store.Areas
                 if (activeVisual != null)
                 {
                     activeVisual.transform.DOScale(0f, 0f);
-                    activeVisual.transform.DOScale(1f, 0.5f).SetEase(Ease.OutBack);
+                    activeVisual.transform.DOScale(1f, activationScaleDuration).SetEase(Ease.OutBack);
                 }
 
-                DOTween.Kill(purchaseVisual);
+                if (purchaseVisual != null)
+                {
+                    DOTween.Kill(purchaseVisual);
+                }
 
                 _purchasingInteractor = null;
             }
@@ -200,8 +220,6 @@ namespace Game.Runtime.Store.Areas
 
         protected virtual void LoadState()
         {
-            // Load from save system if needed
-            // For now, default to locked
             SetState(_currentState);
         }
 
@@ -227,7 +245,7 @@ namespace Game.Runtime.Store.Areas
             if (areaCanvas != null)
                 areaCanvas.gameObject.SetActive(_currentState == PurchasableAreaState.Locked);
 
-            if (costText != null)
+            if (costText != null && areaData != null)
                 costText.text = $"${areaData.PurchaseCost}";
         }
     }

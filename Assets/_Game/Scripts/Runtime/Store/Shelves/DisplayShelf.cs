@@ -7,6 +7,7 @@ using Game.Runtime.Items.Data;
 using Game.Runtime.Character;
 using Game.Runtime.Character.Components;
 using Game.Runtime.Character.Interfaces;
+using Game.Runtime.Character.AI;
 using DG.Tweening;
 
 namespace Game.Runtime.Store.Shelves
@@ -23,6 +24,12 @@ namespace Game.Runtime.Store.Shelves
         [Header("Customer Positions")]
         [SerializeField] private Transform[] customerBrowsePoints;
 
+        [Header("Visual Timing")]
+        [SerializeField] private float interactionScaleAmount = 1.02f;
+        [SerializeField] private float interactionScaleDuration = 0.2f;
+        [SerializeField] private float stockAnimationDuration = 0.3f;
+        [SerializeField] private float rearrangeAnimationDuration = 0.3f;
+
         private List<Item> _displayedItems = new List<Item>();
         private Dictionary<Transform, Item> _slotItemMap = new Dictionary<Transform, Item>();
 
@@ -34,7 +41,7 @@ namespace Game.Runtime.Store.Shelves
         public bool IsFull => _displayedItems.Count >= displaySlots.Length;
         public bool IsEmpty => _displayedItems.Count == 0;
         public int ItemCount => _displayedItems.Count;
-        public float StockPercentage => (float)_displayedItems.Count / displaySlots.Length;
+        public float StockPercentage => displaySlots.Length > 0 ? (float)_displayedItems.Count / displaySlots.Length : 0f;
 
         protected override void Start()
         {
@@ -47,10 +54,13 @@ namespace Game.Runtime.Store.Shelves
         private void InitializeSlots()
         {
             _slotItemMap.Clear();
-            foreach (var slot in displaySlots)
+            if (displaySlots != null)
             {
-                if (slot != null)
-                    _slotItemMap[slot] = null;
+                foreach (var slot in displaySlots)
+                {
+                    if (slot != null)
+                        _slotItemMap[slot] = null;
+                }
             }
         }
 
@@ -58,39 +68,45 @@ namespace Game.Runtime.Store.Shelves
 
         protected override bool CanInteractWhenActive(IInteractor interactor)
         {
-            var character = interactor.Character;
-            var controller = interactor as InteractionController;
+            if (interactor?.Character == null) return false;
 
+            var controller = interactor as InteractionController;
             if (controller == null) return false;
 
-            // Character type based interaction
-            if (IsEmployeeOrPlayer(character))
-            {
-                // For stocking: need items, correct type, shelf not full
-                if (!controller.HasItemsInHand()) return false;
+            var character = interactor.Character;
 
-                var carryController = character.GetComponentInChildren<StackingCarryController>();
-                if (carryController == null) return false;
+            return IsEmployeeOrPlayer(character) 
+                ? CanEmployeeInteract(controller, character)
+                : IsCustomer(character) && CanCustomerInteract(controller);
+        }
 
-                return carryController.CurrentItemType == shelfData.AcceptedItemType && !IsFull;
-            }
-            else if (IsCustomer(character))
-            {
-                // For purchasing: shelf has items, customer can carry
-                return !IsEmpty && controller.CanCarryMore();
-            }
+        private bool CanEmployeeInteract(InteractionController controller, BaseCharacterController character)
+        {
+            // For stocking: need items, correct type, shelf not full
+            if (!controller.HasItemsInHand() || IsFull) return false;
 
-            return false;
+            var carryController = character.GetComponentInChildren<StackingCarryController>();
+            if (carryController == null || shelfData == null) return false;
+
+            return carryController.CurrentItemType == shelfData.AcceptedItemType;
+        }
+
+        private bool CanCustomerInteract(InteractionController controller)
+        {
+            // For purchasing: shelf has items, customer can carry
+            return !IsEmpty && controller.CanCarryMore();
         }
 
         protected override void OnActiveInteractionStart(IInteractor interactor)
         {
             // Visual feedback
-            transform.DOScale(Vector3.one * 1.02f, 0.2f);
+            transform.DOScale(Vector3.one * interactionScaleAmount, interactionScaleDuration);
         }
 
         protected override void OnActiveInteractionContinue(IInteractor interactor)
         {
+            if (interactor?.Character == null) return;
+
             var character = interactor.Character;
 
             if (IsEmployeeOrPlayer(character))
@@ -105,14 +121,14 @@ namespace Game.Runtime.Store.Shelves
 
         protected override void OnActiveInteractionEnd(IInteractor interactor)
         {
-            transform.DOScale(Vector3.one, 0.2f);
+            transform.DOScale(Vector3.one, interactionScaleDuration);
         }
 
         // ==================== STOCKING ====================
 
         private void TryStockItem(IInteractor interactor)
         {
-            if (IsFull) return;
+            if (IsFull || interactor?.Character == null || shelfData == null) return;
 
             var carryController = interactor.Character.GetComponentInChildren<StackingCarryController>();
             if (carryController != null && carryController.CurrentItemType == shelfData.AcceptedItemType)
@@ -127,6 +143,8 @@ namespace Game.Runtime.Store.Shelves
 
         private void PlaceItemOnShelf(Item item)
         {
+            if (item == null) return;
+
             Transform slot = GetEmptySlot();
             if (slot != null)
             {
@@ -134,7 +152,7 @@ namespace Game.Runtime.Store.Shelves
 
                 // Animate placement
                 item.transform.DOScale(0f, 0f);
-                item.transform.DOScale(1f, 0.3f).SetEase(Ease.OutBack);
+                item.transform.DOScale(1f, stockAnimationDuration).SetEase(Ease.OutBack);
 
                 _slotItemMap[slot] = item;
                 _displayedItems.Add(item);
@@ -147,7 +165,7 @@ namespace Game.Runtime.Store.Shelves
 
         private void TryTakeItem(IInteractor interactor)
         {
-            if (IsEmpty) return;
+            if (IsEmpty || interactor?.Character == null) return;
 
             var carryController = interactor.Character.GetComponentInChildren<StackingCarryController>();
             if (carryController != null && !carryController.IsFull)
@@ -163,6 +181,8 @@ namespace Game.Runtime.Store.Shelves
 
         private void RemoveItemFromShelf(Item item)
         {
+            if (item == null) return;
+
             // Find and clear slot
             foreach (var kvp in _slotItemMap)
             {
@@ -195,13 +215,13 @@ namespace Game.Runtime.Store.Shelves
 
         private Item GetLastItem()
         {
-            if (_displayedItems.Count > 0)
-                return _displayedItems[_displayedItems.Count - 1];
-            return null;
+            return _displayedItems.Count > 0 ? _displayedItems[_displayedItems.Count - 1] : null;
         }
 
         private void RearrangeItems()
         {
+            if (displaySlots == null) return;
+
             // Compact items to fill gaps
             var items = new List<Item>(_displayedItems);
             InitializeSlots();
@@ -209,11 +229,14 @@ namespace Game.Runtime.Store.Shelves
             int index = 0;
             foreach (var item in items)
             {
-                if (index < displaySlots.Length)
+                if (item != null && index < displaySlots.Length)
                 {
                     Transform slot = displaySlots[index];
-                    item.transform.DOMove(slot.position, 0.3f);
-                    _slotItemMap[slot] = item;
+                    if (slot != null)
+                    {
+                        item.transform.DOMove(slot.position, rearrangeAnimationDuration);
+                        _slotItemMap[slot] = item;
+                    }
                     index++;
                 }
             }
@@ -223,14 +246,14 @@ namespace Game.Runtime.Store.Shelves
         {
             if (character is PlayerCharacterController) return true;
 
-            var aiController = character as Character.AI.AICharacterController;
-            return aiController != null && aiController.Data.CharacterType == Character.Interfaces.CharacterType.AI_Employee;
+            var aiController = character as AICharacterController;
+            return aiController != null && aiController.Data.CharacterType == CharacterType.AI_Employee;
         }
 
         private bool IsCustomer(BaseCharacterController character)
         {
-            var aiController = character as Character.AI.AICharacterController;
-            return aiController != null && aiController.Data.CharacterType == Character.Interfaces.CharacterType.AI_Customer;
+            var aiController = character as AICharacterController;
+            return aiController != null && aiController.Data.CharacterType == CharacterType.AI_Customer;
         }
 
         public Transform GetCustomerBrowsePoint()

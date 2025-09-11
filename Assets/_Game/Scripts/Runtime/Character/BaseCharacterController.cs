@@ -11,7 +11,9 @@ using Game.Runtime.Character.Data;
 
 namespace Game.Runtime.Character
 {
-    [RequireComponent(typeof(CharacterMotor), typeof(StackingCarryController), typeof(InteractionController))]
+    [RequireComponent(typeof(CharacterMotor))]
+    [RequireComponent(typeof(StackingCarryController))]
+    [RequireComponent(typeof(InteractionController))]
     public abstract class BaseCharacterController : MonoBehaviour, ICharacterController
     {
         [Inject] protected IGameManager _gameManager;
@@ -33,7 +35,7 @@ namespace Game.Runtime.Character
 
         protected virtual void Awake()
         {
-            // Get components early
+            // Get components early with null checks
             _motor = GetComponent<CharacterMotor>();
             _carryingController = GetComponent<StackingCarryController>();
             _interactionController = GetComponent<InteractionController>();
@@ -52,6 +54,12 @@ namespace Game.Runtime.Character
 
         protected virtual void Initialize()
         {
+            if (_motor == null)
+            {
+                Debug.LogError($"[{gameObject.name}] Cannot initialize without CharacterMotor!", this);
+                return;
+            }
+
             SetupStateMachine();
             SetupGameStateHandling();
 
@@ -66,7 +74,7 @@ namespace Game.Runtime.Character
             if (_motor == null)
                 Debug.LogError($"[{gameObject.name}] CharacterMotor component is missing!", this);
             if (_carryingController == null)
-                Debug.LogError($"[{gameObject.name}] CarryingController component is missing!", this);
+                Debug.LogError($"[{gameObject.name}] StackingCarryController component is missing!", this);
             if (_interactionController == null)
                 Debug.LogError($"[{gameObject.name}] InteractionController component is missing!", this);
         }

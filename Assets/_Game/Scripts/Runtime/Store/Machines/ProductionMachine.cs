@@ -5,6 +5,7 @@ using Game.Runtime.Store.Areas;
 using Game.Runtime.Interactions.Interfaces;
 using Game.Runtime.Items;
 using Game.Runtime.Items.Data;
+using Game.Runtime.Character;
 using Game.Runtime.Character.Components;
 using Game.Runtime.Core.DI;
 using DG.Tweening;
@@ -29,6 +30,15 @@ namespace Game.Runtime.Store.Machines
 
         [Header("Employee Positions")]
         [SerializeField] private Transform[] employeeWaitPoints;
+
+        [Header("Visual Timing")]
+        [SerializeField] private float interactionScaleAmount = 1.05f;
+        [SerializeField] private float interactionScaleDuration = 0.2f;
+        [SerializeField] private float itemMoveAnimationDuration = 0.5f;
+        [SerializeField] private float productionVisualDelay = 0.5f;
+
+        [Header("Production Delays")]
+        [SerializeField] private float fullCapacityWaitTime = 1f;
 
         [Inject] private IItemPoolService _itemPool;
 
@@ -57,14 +67,20 @@ namespace Game.Runtime.Store.Machines
 
         protected override bool CanInteractWhenActive(IInteractor interactor)
         {
-            // Machine'den item alabilmek için koşullar
+            if (interactor?.Character == null) return false;
+
             var controller = interactor as InteractionController;
             if (controller == null) return false;
 
-            // Elinde item varsa ve Machine'de item varsa interaction yapmasın
-            if (controller.HasItemsInHand() && _producedItems.Count > 0)
+            // Machine'de item yoksa alamaz
+            if (_producedItems.Count == 0) return false;
+
+            // Daha fazla taşıyamazsa alamaz
+            if (!controller.CanCarryMore()) return false;
+
+            // Elinde farklı tip item varsa alamaz
+            if (controller.HasItemsInHand())
             {
-                // Farklı item tipiyse alamaz
                 var carryController = interactor.Character.GetComponentInChildren<StackingCarryController>();
                 if (carryController != null && carryController.CurrentItemType != machineData.ProducedItemType)
                 {
@@ -72,21 +88,14 @@ namespace Game.Runtime.Store.Machines
                 }
             }
 
-            // Daha fazla taşıyamazsa alamaz
-            if (!controller.CanCarryMore())
-            {
-                return false;
-            }
-
-            // Machine'de item yoksa alamaz
-            return _producedItems.Count > 0;
+            return true;
         }
 
         protected override void OnActiveInteractionStart(IInteractor interactor)
         {
             // Visual feedback
             DOTween.Kill(transform);
-            transform.DOScale(Vector3.one * 1.05f, 0.2f);
+            transform.DOScale(Vector3.one * interactionScaleAmount, interactionScaleDuration);
         }
 
         protected override void OnActiveInteractionContinue(IInteractor interactor)
@@ -97,7 +106,7 @@ namespace Game.Runtime.Store.Machines
         protected override void OnActiveInteractionEnd(IInteractor interactor)
         {
             // Reset visual
-            transform.DOScale(Vector3.one, 0.2f);
+            transform.DOScale(Vector3.one, interactionScaleDuration);
         }
 
         protected override void CompletePurchase()
@@ -110,7 +119,7 @@ namespace Game.Runtime.Store.Machines
 
         public void StartProduction()
         {
-            if (!IsActive || _isProducing) return;
+            if (!IsActive || _isProducing || machineData == null) return;
 
             _isProducing = true;
             _productionCoroutine = StartCoroutine(ProductionCycle());
@@ -125,11 +134,15 @@ namespace Game.Runtime.Store.Machines
                 StopCoroutine(_productionCoroutine);
                 _productionCoroutine = null;
             }
+
+            // Stop visual effects
+            AnimateGears(false);
+            SetConveyorMovement(false);
         }
 
         private IEnumerator ProductionCycle()
         {
-            while (_isProducing && IsActive)
+            while (_isProducing && IsActive && machineData != null)
             {
                 if (_producedItems.Count < machineData.MaxCapacity)
                 {
@@ -137,7 +150,7 @@ namespace Game.Runtime.Store.Machines
                 }
                 else
                 {
-                    yield return new WaitForSeconds(1f); // Wait if full
+                    yield return new WaitForSeconds(fullCapacityWaitTime);
                 }
 
                 yield return new WaitForSeconds(machineData.ProductionInterval);
@@ -146,15 +159,18 @@ namespace Game.Runtime.Store.Machines
 
         private IEnumerator ProduceItemSequence()
         {
+            if (machineData == null || _itemPool == null) yield break;
+
             // Start visual feedback
             AnimateGears(true);
             SetConveyorMovement(true);
 
-            yield return new WaitForSeconds(machineData.ProductionInterval * 0.5f);
+            float halfProductionTime = machineData.ProductionInterval * 0.5f;
+            yield return new WaitForSeconds(halfProductionTime);
 
             // Spawn item
             Item item = _itemPool.GetItem(machineData.ProducedItemType);
-            if (item != null)
+            if (item != null && productionPoint != null)
             {
                 item.transform.position = productionPoint.position;
                 item.transform.rotation = Quaternion.identity;
@@ -163,20 +179,28 @@ namespace Game.Runtime.Store.Machines
                 Transform targetSlot = GetAvailableSlot();
 
                 // Animate to output
-                item.transform.DOMove(targetSlot.position, 0.5f)
-                    .SetEase(Ease.OutQuad)
-                    .OnComplete(() =>
-                    {
-                        _producedItems.Enqueue(item);
+                if (targetSlot != null)
+                {
+                    item.transform.DOMove(targetSlot.position, itemMoveAnimationDuration)
+                        .SetEase(Ease.OutQuad)
+                        .OnComplete(() =>
+                        {
+                            _producedItems.Enqueue(item);
 
-                        if (productionVFX != null)
-                            productionVFX.Play();
+                            if (productionVFX != null)
+                                productionVFX.Play();
 
-                        OnItemProduced?.Invoke(item);
-                    });
+                            OnItemProduced?.Invoke(item);
+                        });
+                }
+                else
+                {
+                    _producedItems.Enqueue(item);
+                    OnItemProduced?.Invoke(item);
+                }
             }
 
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(productionVisualDelay);
 
             // Stop visual feedback
             AnimateGears(false);
@@ -185,12 +209,13 @@ namespace Game.Runtime.Store.Machines
 
         private void TryGiveItem(IInteractor interactor)
         {
-            if (_producedItems.Count == 0) return;
+            if (_producedItems.Count == 0 || interactor?.Character == null) return;
 
             var carryController = interactor.Character.GetComponentInChildren<StackingCarryController>();
             if (carryController != null && !carryController.IsFull)
             {
                 Item item = _producedItems.Peek();
+                if (item == null) return;
 
                 // Item tipi kontrolü
                 if (carryController.CurrentItemType != ItemType.None &&
@@ -219,7 +244,8 @@ namespace Game.Runtime.Store.Machines
                 {
                     if (animate)
                     {
-                        gear.DORotate(new Vector3(0, 360, 0), 2f, RotateMode.LocalAxisAdd)
+                        float rotationDuration = 2f; // 360 derece 2 saniyede
+                        gear.DORotate(new Vector3(0, 360, 0), rotationDuration, RotateMode.LocalAxisAdd)
                             .SetLoops(-1, LoopType.Restart)
                             .SetEase(Ease.Linear);
                     }
@@ -233,10 +259,10 @@ namespace Game.Runtime.Store.Machines
 
         private void SetConveyorMovement(bool moving)
         {
-            if (conveyorRenderer != null && conveyorRenderer.material != null)
+            if (conveyorRenderer?.material != null)
             {
-                float speed = moving ? 1f : 0f;
-                conveyorRenderer.material.SetFloat("_ScrollSpeed", speed);
+                float scrollSpeed = moving ? 1f : 0f;
+                conveyorRenderer.material.SetFloat("_ScrollSpeed", scrollSpeed);
             }
         }
 

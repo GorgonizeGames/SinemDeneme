@@ -3,6 +3,7 @@ using UnityEngine.AI;
 using Game.Runtime.Items.Interfaces;
 using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Character.AI.Factory;
+using Game.Runtime.Character.Components;
 
 namespace Game.Runtime.Character.AI
 {
@@ -22,6 +23,9 @@ namespace Game.Runtime.Character.AI
         [SerializeField] protected float pickupRange = 1.5f;
         [SerializeField] protected bool enableSmartPickup = true;
 
+        [Header("AI Movement Thresholds")]
+        [SerializeField] protected float velocityThreshold = 0.1f;
+
         // AI Behavior System
         protected IAIBehavior _currentBehavior;
         protected float _lastDecisionTime;
@@ -34,7 +38,7 @@ namespace Game.Runtime.Character.AI
 
         // Public properties
         public NavMeshAgent NavAgent => navMeshAgent;
-        public bool IsMoving => navMeshAgent != null && navMeshAgent.velocity.magnitude > 0.1f;
+        public bool IsMoving => navMeshAgent != null && navMeshAgent.velocity.magnitude > velocityThreshold;
         public bool HasReachedDestination => navMeshAgent != null && !navMeshAgent.pathPending && navMeshAgent.remainingDistance < stoppingDistance;
 
         protected override void Awake()
@@ -51,10 +55,9 @@ namespace Game.Runtime.Character.AI
         {
             SetupAIBehavior();
 
-            if (enableDebugLogs)
-                Debug.Log($"🤖 AI Character initialized - Role: {Data.CharacterType}, Type: {Data.CharacterType}");
+            if (enableDebugLogs && Data != null)
+                Debug.Log($"🤖 AI Character initialized - Role: {Data.CharacterType}");
         }
-
 
         protected virtual void SetupNavMeshAgent()
         {
@@ -67,8 +70,15 @@ namespace Game.Runtime.Character.AI
 
         protected virtual void SetupAIBehavior()
         {
-            _currentBehavior = AIBehaviorFactory.CreateBehavior(Data.CharacterType, this);
-            _currentBehavior?.Initialize();
+            if (Data != null)
+            {
+                _currentBehavior = AIBehaviorFactory.CreateBehavior(Data.CharacterType, this);
+                _currentBehavior?.Initialize();
+            }
+            else
+            {
+                Debug.LogError($"[{gameObject.name}] Cannot setup AI behavior without CharacterData!", this);
+            }
         }
 
         protected override void HandleInput()
@@ -105,7 +115,7 @@ namespace Game.Runtime.Character.AI
         protected virtual void HandleAIPickupLogic()
         {
             // Only employees should actively pickup items for now
-            if (Data.CharacterType != CharacterType.AI_Employee) return;
+            if (Data?.CharacterType != CharacterType.AI_Employee) return;
             if (_carryingController == null || _interactionController == null) return;
 
             if (!_carryingController.IsCarrying && _targetItem == null)
@@ -122,15 +132,14 @@ namespace Game.Runtime.Character.AI
         {
             if (_interactionController == null) return;
 
-            // var nearbyItems = _interactionController.NearbyItems;
-
+            // TODO: Implement proper item detection system
+            // var nearbyItems = _interactionController.GetNearbyItems();
             // foreach (var item in nearbyItems)
             // {
             //     if (_carryingController.CanPickupItem(item))
             //     {
             //         _targetItem = item;
             //         MoveTo(item.Transform.position);
-
             //         if (enableDebugLogs)
             //             Debug.Log($"🤖 AI found target item: {item.ItemId}");
             //         break;
@@ -140,14 +149,14 @@ namespace Game.Runtime.Character.AI
 
         private void FindNearbyDropZones()
         {
-           
+            // TODO: Implement drop zone detection
         }
 
         protected virtual void UpdateMovementFromNavMesh()
         {
             if (navMeshAgent == null) return;
 
-            if (navMeshAgent.hasPath && navMeshAgent.velocity.magnitude > 0.1f)
+            if (navMeshAgent.hasPath && navMeshAgent.velocity.magnitude > velocityThreshold)
             {
                 Vector3 velocity = navMeshAgent.desiredVelocity.normalized;
                 Vector2 movementInput = new Vector2(velocity.x, velocity.z);
@@ -200,7 +209,7 @@ namespace Game.Runtime.Character.AI
                 _targetDestination = destination;
                 _isMovingToTarget = true;
 
-                if (enableDebugLogs)
+                if (enableDebugLogs && Data != null)
                     Debug.Log($"🎯 {Data.CharacterType} moving to: {destination}");
 
                 return true;
