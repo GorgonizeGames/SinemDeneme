@@ -8,14 +8,33 @@ namespace Game.Runtime.Store.Machines
     public class ProductionMachineData : PurchasableAreaData
     {
         [Header("Production")]
-        public ItemType ProducedItemType = ItemType.Comic;
-        public float ProductionInterval = 3f;
-        public int MaxCapacity = 10;
+        [SerializeField] private MachineCatagory machineCatagory;
+        [SerializeField] private ItemType producedItemType;
+        [SerializeField] private float productionInterval = 3f;
+        [SerializeField] private int maxCapacity = 10;
 
         [Header("Upgrade")]
-        public int SpeedUpgradeCost = 50;
-        public int CapacityUpgradeCost = 75;
-        public float SpeedMultiplier = 0.8f;
-        public int CapacityIncrease = 5;
+        [SerializeField] private int speedUpgradeCost = 50;
+        [SerializeField] private int capacityUpgradeCost = 75;
+        [SerializeField] private float speedMultiplier = 0.8f;
+        [SerializeField] private int capacityIncrease = 5;
+
+        // --- Public Properties (Değişkenlere dışarıdan erişim için) ---
+
+        public MachineCatagory MachineCatagory => machineCatagory;
+        public ItemType ProducedItemType => producedItemType;
+        public float ProductionInterval => productionInterval;
+        public int MaxCapacity => maxCapacity;
+        public int SpeedUpgradeCost => speedUpgradeCost;
+        public int CapacityUpgradeCost => capacityUpgradeCost;
+        public float SpeedMultiplier => speedMultiplier;
+        public int CapacityIncrease => capacityIncrease;
+    }
+
+    public enum MachineCatagory
+    {
+        None = 0,
+        Comic = 1,
+        Figure = 2,
     }
 }

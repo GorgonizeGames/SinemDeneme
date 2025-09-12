@@ -479,7 +479,7 @@ namespace Game.Runtime.Store.Machines
         }
 
         // ✅ Debug information
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         [ContextMenu("Show Production Stats")]
         private void ShowProductionStats()
         {
@@ -488,6 +488,7 @@ namespace Game.Runtime.Store.Machines
                      $"Current Rate: {GetProductionRate():F2} items/sec\n" +
                      $"Items in Queue: {_producedItems.Count}/{machineData.MaxCapacity}");
         }
-        #endif
+#endif
     }
+
 }

@@ -8,7 +8,7 @@ namespace Game.Runtime.Store.Shelves
     public class DisplayShelfData : PurchasableAreaData
     {
         [Header("Shelf Configuration")]
-        public ItemType AcceptedItemType = ItemType.Comic;
+        public ItemType AcceptedItemType;
         public int MaxDisplayItems = 12;
         public float RestockThreshold = 0.3f; // %30'un altına düştüğünde restock gerekir
         

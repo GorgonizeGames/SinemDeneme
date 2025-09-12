@@ -7,7 +7,7 @@ namespace Game.Runtime.Items.Data
     public class ItemData : BaseDataModel
     {
         [Header("Item Info")]
-        public ItemType ItemType = ItemType.Comic;
+        public ItemType ItemType;
         public string DisplayName = "New Item";
         public Sprite ItemIcon;
 

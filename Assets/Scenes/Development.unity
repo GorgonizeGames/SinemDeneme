@@ -884,6 +884,113 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   poolConfigs: []
   poolContainer: {fileID: 0}
+--- !u!1001 &1263902081
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.04
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 11.03
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 180
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: b36434e03ad74944193cbf30c3e3a2ac, type: 2}
+    - target: {fileID: 919132149155446097, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      propertyPath: m_Name
+      value: CBMachine_Spiderman
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1263902083}
+  m_SourcePrefab: {fileID: 100100000, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+--- !u!1 &1263902082 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: c9f42ca157a854a48852d9513132d01f, type: 3}
+  m_PrefabInstance: {fileID: 1263902081}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1263902083
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1263902082}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a1ce90a5bdd29543b803f6e3e0eead1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  areaData: {fileID: 0}
+  purchaseVisual: {fileID: 0}
+  activeVisual: {fileID: 0}
+  purchaseDuration: 2
+  purchaseScaleAmount: 1.1
+  purchaseAnimDuration: 0.3
+  activationScaleDuration: 0.5
+  visualResetDuration: 0.2
+  areaCanvas: {fileID: 0}
+  progressBar: {fileID: 0}
+  costText: {fileID: 0}
+  interactionType: 4
+  interactionPriority: 1
+  machineData: {fileID: 0}
+  productionPoint: {fileID: 0}
+  outputPoint: {fileID: 0}
+  outputSlots: []
+  gears: []
+  productionVFX: {fileID: 0}
+  conveyorRenderer: {fileID: 0}
+  employeeWaitPoints: []
+  interactionScaleAmount: 1.05
+  interactionScaleDuration: 0.2
+  itemMoveAnimationDuration: 0.5
+  productionVisualDelay: 0.5
+  fullCapacityWaitTime: 1
 --- !u!1 &1437910366
 GameObject:
   m_ObjectHideFlags: 0
@@ -2514,6 +2621,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   data: {fileID: 11400000, guid: 5731591e0758fcb42ad57b1c5ac9b8e7, type: 2}
+  movementThreshold: 0.1
+  rotationThreshold: 0.1
 --- !u!136 &5768416209402822681
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -3247,3 +3356,4 @@ SceneRoots:
   - {fileID: 1551953338}
   - {fileID: 1041194834}
   - {fileID: 449434784}
+  - {fileID: 1263902081}
