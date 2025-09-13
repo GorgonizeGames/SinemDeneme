@@ -2,6 +2,8 @@ using UnityEngine;
 using Game.Runtime.Items.Data;
 using Game.Runtime.Items.Interfaces;
 using Game.Runtime.Core.Interfaces;
+using Game.Runtime.Store.Machines;
+using System.Collections.Generic;
 
 namespace Game.Runtime.Items
 {
@@ -24,6 +26,12 @@ namespace Game.Runtime.Items
         // Properties
         public ItemData Data => itemData;
         public bool IsOnShelf => _isOnShelf;
+
+        public ItemPlacer Placer { get; set; }
+        public List<Collider> Colliders { get; }
+
+        public Rigidbody Rigidbody;
+        public void OnReset() { /* implementation */ }
 
         void Awake()
         {

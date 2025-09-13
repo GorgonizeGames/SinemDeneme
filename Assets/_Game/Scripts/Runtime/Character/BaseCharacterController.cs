@@ -9,6 +9,8 @@ using Game.Runtime.Character.Components;
 using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Core.Interfaces;
 using Game.Runtime.Character.Data;
+using System.Collections.Generic;
+using Game.Runtime.Items;
 
 namespace Game.Runtime.Character
 {
@@ -40,6 +42,10 @@ namespace Game.Runtime.Character
         public Vector2 MovementInput => _currentMovementInput;
         public CharacterData Data => _motor?.Data;
         public ICarryingController CarryingController => _carryingController;
+
+        public List<Item> Items;
+
+        public List<Item> ItemsCount;
 
         protected virtual void Awake()
         {

@@ -1,76 +1,100 @@
 using UnityEngine;
+using DG.Tweening;
+using System.Collections.Generic;
 using Game.Runtime.Core.DI;
 using Game.Runtime.Core.Interfaces;
 using Game.Runtime.Interactions.Interfaces;
-using DG.Tweening;
 using Game.Runtime.Character;
 using Game.Runtime.Core.Extensions;
 
 namespace Game.Runtime.Store.Areas
 {
-    public abstract class PurchasableArea : MonoBehaviour, IInteractable
+    /// <summary>
+    /// Generic purchasable area that works with any BasePurchasableData
+    /// Eski kodlarınızdaki logic'i simplified architecture ile birleştirir
+    /// </summary>
+    public abstract class PurchasableArea<T> : MonoBehaviour, IInteractable where T : BasePurchasableData
     {
-        [Header("Area Settings")]
-        [SerializeField] protected PurchasableAreaData areaData;
-        [SerializeField] protected Transform purchaseVisual;
+        [Header("Area Configuration")]
+        [SerializeField] protected T areaData;
+        [SerializeField] protected string areaId;
+
+        [Header("Visual References - Colliders")]
+        [SerializeField] protected Collider activeCollider;
+        [SerializeField] protected Collider passiveCollider;
+
+        [Header("Visual References - GameObjects")]
         [SerializeField] protected GameObject activeVisual;
+        [SerializeField] protected GameObject passiveVisual;
+        [SerializeField] protected GameObject nextObjectCamera;
+        [SerializeField] protected List<GameObject> objectsToOpenOnPurchase = new List<GameObject>();
+        [SerializeField] protected List<GameObject> objectsToCloseOnPurchase = new List<GameObject>();
 
-        [Header("Purchase Timing")]
-        [SerializeField] protected float purchaseDuration = 2f;
-
-        [Header("Visual Effects")]
-        [SerializeField] protected float purchaseScaleAmount = 1.1f;
-        [SerializeField] protected float purchaseAnimDuration = 0.3f;
-        [SerializeField] protected float activationScaleDuration = 0.5f;
-        [SerializeField] protected float visualResetDuration = 0.2f;
-
-        [Header("UI Elements")]
+        [Header("Visual References - UI Elements")]
         [SerializeField] protected Canvas areaCanvas;
-        [SerializeField] protected UnityEngine.UI.Image progressBar;
         [SerializeField] protected TMPro.TextMeshProUGUI costText;
+        [SerializeField] protected UnityEngine.UI.Image outlineImage;
+        [SerializeField] protected UnityEngine.UI.Image backgroundColorImage;
+        [SerializeField] protected UnityEngine.UI.Image progressBarImage;
+        [SerializeField] protected UnityEngine.UI.Image moneyIconImage;
 
-        [Header("Interaction Settings")]
-        [SerializeField] protected InteractionType interactionType = InteractionType.Purchasable;
-        [SerializeField] protected InteractionPriority interactionPriority = InteractionPriority.Medium;
+        [Header("Visual References - Effects")]
+        [SerializeField] protected ParticleSystem purchaseVFX;
+        [SerializeField] protected Transform moneyDropTarget;
 
         [Inject] protected IGameManager _gameManager;
         [Inject] protected IEconomyService _economyService;
 
+        // Core State
         protected PurchasableAreaState _currentState = PurchasableAreaState.Locked;
-        protected float _purchaseProgress = 0f;
         protected IInteractor _purchasingInteractor;
 
-        // Performance optimizations
-        private readonly System.Collections.Generic.List<Tween> _activeTweens = new System.Collections.Generic.List<Tween>();
-        private Tween _purchaseVisualTween;
-        private Tween _activationTween;
+        // Purchase Progress - Eski koddan inspired
+        protected float _purchaseProgress = 0f;
+        protected float _totalSpent = 0f;
+        protected bool _canInteract = false;
 
-        // Cached strings to avoid allocation in hot paths
+        // Animation Management
+        protected readonly List<Tween> _activeTweens = new List<Tween>();
+        protected Tween _purchaseTween;
+        protected Tween _activationTween;
+        protected Tween _interactionTween;
+
+        // Cached Values for Performance
         private string _cachedCostText;
         private bool _costTextDirty = true;
 
+        // Eski koddan - character tracking
+        protected List<BaseCharacterController> _interactingCharacters = new List<BaseCharacterController>();
+
         // IInteractable Implementation
-        public virtual InteractionType InteractionType => interactionType;
-        public virtual InteractionPriority Priority => interactionPriority;
+        public virtual InteractionType InteractionType => areaData?.InteractionType ?? InteractionType.Purchasable;
 
         // Events
-        public System.Action<PurchasableArea> OnPurchased;
-        public System.Action<PurchasableArea> OnActivated;
+        public System.Action<PurchasableArea<T>> OnAreaPurchased;
+        public System.Action<PurchasableArea<T>> OnAreaActivated;
+        public System.Action<PurchasableArea<T>, float> OnPurchaseProgress;
 
         // Properties
-        public PurchasableAreaData Data => areaData;
-        public PurchasableAreaState State => _currentState;
+        public T Data => areaData;
+        public PurchasableAreaState CurrentState => _currentState;
         public bool IsActive => _currentState == PurchasableAreaState.Active;
         public bool IsLocked => _currentState == PurchasableAreaState.Locked;
         public bool IsPurchasing => _currentState == PurchasableAreaState.Purchasing;
+        public int Cost => areaData?.PurchaseCost ?? 100;
+        public string AreaId => areaId;
+        public float PurchaseProgress => _purchaseProgress;
+        public bool CanInteract => _canInteract;
 
         protected virtual void Awake()
         {
             try
             {
                 this.InjectDependencies();
+                ValidateAreaData();
+                InitializeColliders();
                 PrepareCachedStrings();
-                LoadState();
+                LoadAreaState(); // Eski koddan - save/load system
             }
             catch (System.Exception e)
             {
@@ -82,7 +106,8 @@ namespace Game.Runtime.Store.Areas
         {
             try
             {
-                UpdateVisuals();
+                UpdateVisualState();
+                SetupGameStateHandling();
             }
             catch (System.Exception e)
             {
@@ -90,28 +115,80 @@ namespace Game.Runtime.Store.Areas
             }
         }
 
+        private void ValidateAreaData()
+        {
+            if (areaData == null)
+            {
+                Debug.LogError($"[{gameObject.name}] AreaData of type {typeof(T).Name} is not assigned!", this);
+                enabled = false;
+                return;
+            }
+
+            // Auto-generate ID if empty
+            if (string.IsNullOrEmpty(areaId))
+            {
+                areaId = gameObject.name.Replace(" ", "_").Replace("(", "").Replace(")", "");
+            }
+        }
+
+        private void InitializeColliders()
+        {
+            if (activeCollider != null)
+                activeCollider.enabled = false;
+
+            if (passiveCollider != null)
+                passiveCollider.enabled = false;
+        }
+
         private void PrepareCachedStrings()
         {
             if (areaData != null)
             {
-                _cachedCostText = $"${areaData.PurchaseCost}";
+                _cachedCostText = areaData.GetFormattedCost();
                 _costTextDirty = false;
+            }
+        }
+
+        private void SetupGameStateHandling()
+        {
+            if (_gameManager != null)
+            {
+                _gameManager.OnStateChanged += HandleGameStateChange;
+            }
+        }
+
+        protected virtual void HandleGameStateChange(GameState newState)
+        {
+            // Game durdurulduğunda purchase işlemini iptal et
+            if (newState != GameState.Playing && IsPurchasing)
+            {
+                CancelPurchaseProcess();
             }
         }
 
         // ==================== IInteractable Implementation ====================
 
-        public virtual bool CanInteract(IInteractor interactor)
+        public virtual bool OnCanInteract(IInteractor interactor)
         {
-            if (interactor?.Character == null) return false;
+            if (interactor?.Character == null || areaData == null) return false;
 
             try
             {
+                var character = interactor.Character;
+
+                // Character type kontrolü - base class properties kullanarak
+                if (character is PlayerCharacterController && !areaData.AllowPlayerInteraction)
+                    return false;
+
+                if (IsEmployee(character) && !areaData.AllowEmployeeInteraction)
+                    return false;
+
                 if (IsLocked)
                 {
-                    if (interactor.Character is PlayerCharacterController)
+                    // Sadece player satın alabilir
+                    if (character is PlayerCharacterController)
                     {
-                        return _economyService != null && _economyService.CanAfford(areaData.PurchaseCost);
+                        return _economyService != null && areaData.CanStartPurchase(_economyService.CurrentMoney);
                     }
                     return false;
                 }
@@ -135,6 +212,12 @@ namespace Game.Runtime.Store.Areas
 
             try
             {
+                // Character'ı listeye ekle
+                if (!_interactingCharacters.Contains(interactor.Character))
+                {
+                    _interactingCharacters.Add(interactor.Character);
+                }
+
                 if (IsLocked && interactor.Character is PlayerCharacterController)
                 {
                     StartPurchaseProcess(interactor);
@@ -173,6 +256,12 @@ namespace Game.Runtime.Store.Areas
         {
             try
             {
+                // Character'ı listeden çıkar
+                if (_interactingCharacters.Contains(interactor.Character))
+                {
+                    _interactingCharacters.Remove(interactor.Character);
+                }
+
                 if (IsPurchasing && _purchasingInteractor == interactor)
                 {
                     CancelPurchaseProcess();
@@ -188,41 +277,45 @@ namespace Game.Runtime.Store.Areas
             }
         }
 
-        // ==================== Override Methods for Active State ====================
+        // ==================== Abstract Methods ====================
 
         protected abstract bool CanInteractWhenActive(IInteractor interactor);
         protected abstract void OnActiveInteractionStart(IInteractor interactor);
         protected abstract void OnActiveInteractionContinue(IInteractor interactor);
         protected abstract void OnActiveInteractionEnd(IInteractor interactor);
 
-        // ==================== Purchase Process ====================
+        // ==================== Purchase Process - Eski koddan inspired ====================
 
         protected virtual void StartPurchaseProcess(IInteractor interactor)
         {
+            if (areaData == null) return;
+
             try
             {
                 _currentState = PurchasableAreaState.Purchasing;
                 _purchasingInteractor = interactor;
                 _purchaseProgress = 0f;
+                _totalSpent = 0f;
+                _canInteract = true;
 
-                // Visual feedback
-                if (progressBar != null)
+                // Visual feedback - eski koddan inspired
+                if (areaData.ShowProgressBar && backgroundColorImage != null)
                 {
-                    progressBar.fillAmount = 0f;
-                    progressBar.transform.parent.gameObject.SetActive(true);
+                    backgroundColorImage.fillAmount = 0f;
                 }
 
-                if (purchaseVisual != null)
+                // Outline scale animation - eski koddan
+                if (areaData.EnableScaleAnimation && outlineImage != null)
                 {
-                    CleanupPurchaseVisualTween();
-                    _purchaseVisualTween = purchaseVisual.transform.DOScale(purchaseScaleAmount, purchaseAnimDuration)
-                        .SetLoops(-1, LoopType.Yoyo);
-                    
-                    if (_purchaseVisualTween != null)
-                    {
-                        _activeTweens.Add(_purchaseVisualTween);
-                    }
+                    CleanupInteractionTween();
+                    _interactionTween = outlineImage.transform.DOScale(
+                        Vector3.one * areaData.PurchaseScaleAmount,
+                        areaData.PurchaseAnimDuration);
+                    if (_interactionTween != null)
+                        _activeTweens.Add(_interactionTween);
                 }
+
+                StartPurchaseAnimation();
             }
             catch (System.Exception e)
             {
@@ -233,12 +326,39 @@ namespace Game.Runtime.Store.Areas
 
         protected virtual void ContinuePurchaseProcess()
         {
+            if (_economyService == null || areaData == null) return;
+
             try
             {
-                _purchaseProgress += Time.deltaTime / purchaseDuration;
+                int currentMoney = _economyService.CurrentMoney;
 
-                if (progressBar != null)
-                    progressBar.fillAmount = _purchaseProgress;
+                if (areaData.AllowPartialPayment)
+                {
+                    // Partial payment mode - eski koddan inspired
+                    float paymentAmount = areaData.GetPartialPaymentAmount(currentMoney) * Time.deltaTime;
+                    int intPaymentAmount = Mathf.FloorToInt(paymentAmount);
+
+                    if (intPaymentAmount > 0 && _economyService.TrySpend(intPaymentAmount))
+                    {
+                        _totalSpent += intPaymentAmount;
+                        _purchaseProgress = _totalSpent / areaData.PurchaseCost;
+
+                        UpdatePurchaseVisuals();
+                        OnPurchaseProgress?.Invoke(this, _purchaseProgress);
+
+                        if (areaData.EnableMoneyDropAudio)
+                        {
+                            CreateMoneyDropEffect();
+                        }
+                    }
+                }
+                else
+                {
+                    // Traditional progress mode
+                    _purchaseProgress += Time.deltaTime * areaData.GetPurchaseProgressRate();
+                    UpdatePurchaseVisuals();
+                    OnPurchaseProgress?.Invoke(this, _purchaseProgress);
+                }
 
                 if (_purchaseProgress >= 1f)
                 {
@@ -254,29 +374,25 @@ namespace Game.Runtime.Store.Areas
 
         protected virtual void CancelPurchaseProcess()
         {
+            if (areaData == null) return;
+
             try
             {
+                // Handle refund if enabled
+                if (areaData.RefundOnCancel && _totalSpent > 0)
+                {
+                    _economyService?.AddMoney(Mathf.FloorToInt(_totalSpent));
+                }
+
                 _currentState = PurchasableAreaState.Locked;
                 _purchasingInteractor = null;
                 _purchaseProgress = 0f;
+                _totalSpent = 0f;
+                _canInteract = false;
 
-                // Reset visuals
-                if (progressBar != null)
-                {
-                    progressBar.fillAmount = 0f;
-                    progressBar.transform.parent.gameObject.SetActive(false);
-                }
-
-                CleanupPurchaseVisualTween();
-
-                if (purchaseVisual != null)
-                {
-                    Tween resetTween = purchaseVisual.transform.DOScale(1f, visualResetDuration);
-                    if (resetTween != null)
-                    {
-                        _activeTweens.Add(resetTween);
-                    }
-                }
+                UpdatePurchaseVisuals();
+                ResetPurchaseAnimations();
+                SaveAreaState(); // Eski koddan
             }
             catch (System.Exception e)
             {
@@ -286,33 +402,43 @@ namespace Game.Runtime.Store.Areas
 
         protected virtual void CompletePurchase()
         {
+            if (areaData == null) return;
+
             try
             {
-                if (_economyService != null && _economyService.TrySpend(areaData.PurchaseCost))
+                // Final payment calculation
+                if (areaData.AllowPartialPayment)
                 {
-                    SetState(PurchasableAreaState.Active);
-                    OnPurchased?.Invoke(this);
-
-                    // Visual feedback
-                    if (activeVisual != null)
+                    int remainingCost = areaData.PurchaseCost - Mathf.FloorToInt(_totalSpent);
+                    if (remainingCost > 0 && !_economyService.TrySpend(remainingCost))
                     {
-                        activeVisual.transform.localScale = Vector3.zero;
-                        CleanupActivationTween();
-                        _activationTween = activeVisual.transform.DOScale(1f, activationScaleDuration).SetEase(Ease.OutBack);
-                        
-                        if (_activationTween != null)
-                        {
-                            _activeTweens.Add(_activationTween);
-                        }
+                        CancelPurchaseProcess();
+                        return;
                     }
-
-                    CleanupPurchaseVisualTween();
-                    _purchasingInteractor = null;
                 }
                 else
                 {
-                    CancelPurchaseProcess();
+                    if (!_economyService.TrySpend(areaData.PurchaseCost))
+                    {
+                        CancelPurchaseProcess();
+                        return;
+                    }
                 }
+
+                SetAreaState(PurchasableAreaState.Active);
+                OnAreaPurchased?.Invoke(this);
+
+                // Visual feedback
+                if (areaData.EnablePurchaseVFX && purchaseVFX != null)
+                    purchaseVFX.Play();
+
+                if (areaData.EnablePurchaseAudio)
+                {
+                    // SoundManager.PlaySound - eski koddan
+                }
+
+                _purchasingInteractor = null;
+                OnPurchaseCompleted();
             }
             catch (System.Exception e)
             {
@@ -321,73 +447,277 @@ namespace Game.Runtime.Store.Areas
             }
         }
 
-        // ==================== State Management ====================
-
-        protected virtual void LoadState()
+        protected virtual void OnPurchaseCompleted()
         {
-            try
+            if (areaData == null) return;
+
+            // Handle objects to open/close - eski koddan
+            if (objectsToOpenOnPurchase != null)
             {
-                SetState(_currentState);
+                foreach (GameObject obj in objectsToOpenOnPurchase)
+                {
+                    if (obj != null) obj.SetActive(true);
+                }
             }
-            catch (System.Exception e)
+
+            if (objectsToCloseOnPurchase != null)
             {
-                Debug.LogError($"Error loading state: {e.Message}", this);
+                foreach (GameObject obj in objectsToCloseOnPurchase)
+                {
+                    if (obj != null) obj.SetActive(false);
+                }
+            }
+
+            if (nextObjectCamera != null)
+                nextObjectCamera.SetActive(true);
+
+            // Last area logic - eski koddan
+            if (areaData.IsLastArea)
+            {
+                
+                // Floor progression logic burada olabilir
             }
         }
 
-        public virtual void SetState(PurchasableAreaState newState)
+        // ==================== Animation Methods ====================
+
+        private void StartPurchaseAnimation()
+        {
+            if (areaData == null) return;
+
+            CleanupPurchaseTween();
+
+            if (!areaData.AllowPartialPayment)
+            {
+                // Traditional progress bar animation
+                _purchaseTween = DOTween.To(() => _purchaseProgress, x => _purchaseProgress = x, 1f, areaData.PurchaseDuration)
+                    .OnUpdate(() =>
+                    {
+                        UpdatePurchaseVisuals();
+                        OnPurchaseProgress?.Invoke(this, _purchaseProgress);
+                    })
+                    .OnComplete(() => CompletePurchase());
+
+                if (_purchaseTween != null)
+                    _activeTweens.Add(_purchaseTween);
+            }
+        }
+
+        private void UpdatePurchaseVisuals()
+        {
+            if (areaData == null) return;
+
+            // Progress bar update
+            if (areaData.ShowProgressBar && backgroundColorImage != null)
+            {
+                backgroundColorImage.fillAmount = _purchaseProgress;
+            }
+
+            // Cost text for partial payment - eski koddan inspired
+            if (areaData.AllowPartialPayment && costText != null)
+            {
+                int remainingCost = Mathf.Max(0, areaData.PurchaseCost - Mathf.FloorToInt(_totalSpent));
+                costText.text = string.Format(areaData.CostFormat, remainingCost);
+            }
+        }
+
+        private void ResetPurchaseAnimations()
+        {
+            if (areaData == null) return;
+
+            if (areaData.ShowProgressBar && backgroundColorImage != null)
+            {
+                backgroundColorImage.fillAmount = 0f;
+            }
+
+            if (areaData.EnableScaleAnimation && outlineImage != null)
+            {
+                CleanupInteractionTween();
+                _interactionTween = outlineImage.transform.DOScale(Vector3.one, areaData.VisualResetDuration);
+                if (_interactionTween != null)
+                    _activeTweens.Add(_interactionTween);
+            }
+
+            if (costText != null && !string.IsNullOrEmpty(_cachedCostText))
+            {
+                costText.text = _cachedCostText;
+            }
+        }
+
+        private void CreateMoneyDropEffect()
+        {
+            if (!areaData.EnableMoneyDropEffect || moneyDropTarget == null) return;
+
+            // Eski koddan money drop animation
+            // Money pool'dan money objesi al, animasyon yap
+        }
+
+        // ==================== State Management - Eski koddan inspired ====================
+
+        public virtual void SetAreaState(PurchasableAreaState newState)
         {
             try
             {
                 _currentState = newState;
-                UpdateVisuals();
+                UpdateVisualState();
+                SaveAreaState(); // Her state değişiminde kaydet
 
                 if (newState == PurchasableAreaState.Active)
                 {
-                    OnActivated?.Invoke(this);
+                    OnAreaActivated?.Invoke(this);
                 }
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error setting state: {e.Message}", this);
+                Debug.LogError($"Error setting area state: {e.Message}", this);
             }
         }
 
-        protected virtual void UpdateVisuals()
+        protected virtual void UpdateVisualState()
         {
+            if (areaData == null) return;
+
             try
             {
-                if (purchaseVisual != null)
-                    purchaseVisual.gameObject.SetActive(_currentState == PurchasableAreaState.Locked);
+                // Reset colliders
+                if (passiveCollider != null) passiveCollider.enabled = false;
+                if (activeCollider != null) activeCollider.enabled = false;
 
-                if (activeVisual != null)
-                    activeVisual.gameObject.SetActive(_currentState == PurchasableAreaState.Active);
+                // Reset visuals
+                if (activeVisual != null) activeVisual.SetActive(false);
+                if (passiveVisual != null) passiveVisual.SetActive(false);
 
-                if (areaCanvas != null)
-                    areaCanvas.gameObject.SetActive(_currentState == PurchasableAreaState.Locked);
-
-                // Use cached string instead of creating new one
-                if (costText != null && _costTextDirty && !string.IsNullOrEmpty(_cachedCostText))
+                switch (_currentState)
                 {
-                    costText.text = _cachedCostText;
-                    _costTextDirty = false;
+                    case PurchasableAreaState.Locked:
+                        if (passiveVisual != null) passiveVisual.SetActive(true);
+                        if (passiveCollider != null) passiveCollider.enabled = true;
+                        if (areaCanvas != null) areaCanvas.gameObject.SetActive(areaData.ShowCostUI);
+                        UpdateCostText();
+                        break;
+
+                    case PurchasableAreaState.Active:
+                        if (activeVisual != null)
+                        {
+                            activeVisual.SetActive(true);
+
+                            if (areaData.EnableScaleAnimation)
+                            {
+                                // Eski koddan inspired - scale animation
+                                activeVisual.transform.localScale = Vector3.zero;
+                                CleanupActivationTween();
+                                _activationTween = activeVisual.transform
+                                    .DOScale(Vector3.one, areaData.ActivationScaleDuration)
+                                    .SetEase(Ease.OutBack)
+                                    .OnComplete(() =>
+                                    {
+                                        if (activeCollider != null)
+                                            activeCollider.enabled = true;
+                                    });
+
+                                if (_activationTween != null)
+                                    _activeTweens.Add(_activationTween);
+                            }
+                            else
+                            {
+                                if (activeCollider != null)
+                                    activeCollider.enabled = true;
+                            }
+                        }
+                        if (areaCanvas != null) areaCanvas.gameObject.SetActive(false);
+                        break;
                 }
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error updating visuals: {e.Message}", this);
+                Debug.LogError($"Error updating visual state: {e.Message}", this);
             }
         }
 
-        // ==================== CLEANUP ====================
-
-        private void CleanupPurchaseVisualTween()
+        private void UpdateCostText()
         {
-            if (_purchaseVisualTween != null && _purchaseVisualTween.IsActive())
+            if (areaData == null || !areaData.ShowCostUI) return;
+
+            if (costText != null && _costTextDirty)
             {
-                _purchaseVisualTween.Kill();
-                _activeTweens.Remove(_purchaseVisualTween);
-                _purchaseVisualTween = null;
+                costText.text = _cachedCostText;
+                _costTextDirty = false;
+            }
+        }
+
+        // ==================== Save/Load System - Eski koddan ====================
+
+        protected virtual void SaveAreaState()
+        {
+            if (string.IsNullOrEmpty(areaId)) return;
+
+            try
+            {
+                string stateKey = areaId + "_State";
+                string costKey = areaId + "_Cost";
+
+                PlayerPrefs.SetInt(stateKey, (int)_currentState);
+                PlayerPrefs.SetInt(costKey, Cost);
+                PlayerPrefs.Save();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error saving area state: {e.Message}", this);
+            }
+        }
+
+        protected virtual void LoadAreaState()
+        {
+            if (string.IsNullOrEmpty(areaId)) return;
+
+            try
+            {
+                string stateKey = areaId + "_State";
+                string costKey = areaId + "_Cost";
+
+                if (PlayerPrefs.HasKey(stateKey))
+                {
+                    _currentState = (PurchasableAreaState)PlayerPrefs.GetInt(stateKey);
+                }
+
+                if (PlayerPrefs.HasKey(costKey))
+                {
+                    // Cost'u data'dan override etmeyelim, data'daki değer geçerli olsun
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error loading area state: {e.Message}", this);
+            }
+        }
+
+        // ==================== Utility Methods ====================
+
+        private bool IsEmployee(BaseCharacterController character)
+        {
+            if (character == null) return false;
+
+            var aiController = character as Character.AI.AICharacterController;
+            return aiController != null &&
+                   aiController.Data?.CharacterType == Character.Interfaces.CharacterType.AI_Employee;
+        }
+
+        // ==================== Public API ====================
+
+        public bool CanAfford() => areaData != null && _economyService != null && areaData.CanAfford(_economyService.CurrentMoney);
+        public bool CanStartPurchase() => areaData != null && _economyService != null && areaData.CanStartPurchase(_economyService.CurrentMoney);
+        public string GetDisplayName() => areaData?.GetAreaDisplayName() ?? gameObject.name;
+        public float GetPurchaseProgressPercentage() => _purchaseProgress * 100f;
+
+        // ==================== Cleanup ====================
+
+        private void CleanupPurchaseTween()
+        {
+            if (_purchaseTween != null && _purchaseTween.IsActive())
+            {
+                _purchaseTween.Kill();
+                _activeTweens.Remove(_purchaseTween);
+                _purchaseTween = null;
             }
         }
 
@@ -401,37 +731,86 @@ namespace Game.Runtime.Store.Areas
             }
         }
 
+        private void CleanupInteractionTween()
+        {
+            if (_interactionTween != null && _interactionTween.IsActive())
+            {
+                _interactionTween.Kill();
+                _activeTweens.Remove(_interactionTween);
+                _interactionTween = null;
+            }
+        }
+
         private void CleanupAllTweens()
         {
-            try
+            foreach (var tween in _activeTweens)
             {
-                foreach (var tween in _activeTweens)
-                {
-                    if (tween != null && tween.IsActive())
-                    {
-                        tween.Kill();
-                    }
-                }
-                _activeTweens.Clear();
+                if (tween != null && tween.IsActive())
+                    tween.Kill();
+            }
+            _activeTweens.Clear();
 
-                CleanupPurchaseVisualTween();
-                CleanupActivationTween();
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"Error cleaning up tweens: {e.Message}");
-            }
+            CleanupPurchaseTween();
+            CleanupActivationTween();
+            CleanupInteractionTween();
         }
 
         protected virtual void OnDestroy()
         {
             CleanupAllTweens();
+            SaveAreaState();
+
+            if (_gameManager != null)
+            {
+                _gameManager.OnStateChanged -= HandleGameStateChange;
+            }
         }
 
-        void OnDisable()
+        protected virtual void OnDisable()
         {
             CleanupAllTweens();
+            SaveAreaState();
         }
+
+        // ==================== Debug ====================
+
+#if UNITY_EDITOR
+        [ContextMenu("Show Area Stats")]
+        private void ShowAreaStats()
+        {
+            if (areaData == null)
+            {
+                Debug.LogWarning("No area data assigned!");
+                return;
+            }
+
+            Debug.Log($"Area Stats ({typeof(T).Name}):\n" +
+                     $"Type: {areaData.AreaType}\n" +
+                     $"Cost: {areaData.GetFormattedCost()}\n" +
+                     $"State: {_currentState}\n" +
+                     $"Progress: {GetPurchaseProgressPercentage():F1}%\n" +
+                     $"Allow Player: {areaData.AllowPlayerInteraction}\n" +
+                     $"Allow Employee: {areaData.AllowEmployeeInteraction}");
+        }
+
+        void OnValidate()
+        {
+            if (string.IsNullOrEmpty(areaId))
+            {
+                areaId = gameObject.name.Replace(" ", "_").Replace("(", "").Replace(")", "");
+            }
+
+            if (areaData != null)
+            {
+                _costTextDirty = true;
+            }
+        }
+
+        bool IInteractable.CanInteract(IInteractor interactor)
+        {
+            throw new System.NotImplementedException();
+        }
+#endif
     }
 
     public enum PurchasableAreaState

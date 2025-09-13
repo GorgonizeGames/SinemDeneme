@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using DG.Tweening;
 using Game.Runtime.Store.Areas;
 using Game.Runtime.Interactions.Interfaces;
 using Game.Runtime.Items;
@@ -10,59 +11,77 @@ using Game.Runtime.Character.Interfaces;
 using Game.Runtime.Character.AI;
 using Game.Runtime.Core.Extensions;
 using Game.Runtime.Core.Performance;
-using DG.Tweening;
+using Game.Runtime.Store.Machines;
 
 namespace Game.Runtime.Store.Shelves
 {
-    public class DisplayShelf : PurchasableArea
+    /// <summary>
+    /// Updated DisplayShelf - eski kodunuzdan logic'i alıp simplified architecture ile birleştirir
+    /// Generic PurchasableArea<DisplayShelfData> kullanır
+    /// </summary>
+    public class DisplayShelf : PurchasableArea<DisplayShelfData>
     {
-        [Header("Shelf Configuration")]
-        [SerializeField] private DisplayShelfData shelfData;
-
-        [Header("Display Settings")]
+        [Header("Shelf Visual Components")]
+        [SerializeField] private GameObject carpet;
         [SerializeField] private Transform[] displaySlots;
-        [SerializeField] private bool autoArrange = true;
+        [SerializeField] private List<ItemPlacer> itemPlacerList = new List<ItemPlacer>();
 
-        [Header("Customer Positions")]
+        [Header("Customer & Employee Positions")]
         [SerializeField] private Transform[] customerBrowsePoints;
+        [SerializeField] private List<ItemPlacer> employeeTargets = new List<ItemPlacer>();
+        [SerializeField] private List<ItemPlacer> customerTargets = new List<ItemPlacer>();
 
-        [Header("Visual Timing")]
-        [SerializeField] private float interactionScaleAmount = 1.02f;
-        [SerializeField] private float interactionScaleDuration = 0.2f;
-        [SerializeField] private float stockAnimationDuration = 0.3f;
-        [SerializeField] private float rearrangeAnimationDuration = 0.3f;
+        [Header("Next Objects - Eski koddan")]
+        [SerializeField] private List<GameObject> nextObjects = new List<GameObject>();
 
-        private List<Item> _displayedItems = new List<Item>();
+        // Shelf State - eski koddan
+        private List<Item> _items = new List<Item>();
+        private List<Customer> _customers = new List<Customer>();
         private Dictionary<Transform, Item> _slotItemMap = new Dictionary<Transform, Item>();
 
-        // ✅ Performance optimizations - cached components and reusable collections
-        private readonly Dictionary<BaseCharacterController, ICarryingController> _cachedCarryControllers =
+        // Performance optimizations
+        private readonly Dictionary<BaseCharacterController, ICarryingController> _cachedCarryControllers = 
             new Dictionary<BaseCharacterController, ICarryingController>();
         private readonly List<Item> _tempItemList = new List<Item>();
-        private readonly List<Tween> _activeTweens = new List<Tween>();
-        private Tween _interactionTween;
+        private readonly List<Tween> _shelfActiveTweens = new List<Tween>();
 
-        // ✅ Performance tracking
-        private int _totalItemsStocked = 0;
-        private int _totalItemsSold = 0;
-        private float _lastStockTime = 0f;
-
-        // Events
+        // Events - eski koddan
         public System.Action<Item> OnItemStocked;
         public System.Action<Item> OnItemPurchased;
+        public System.Action OnPlayerIn; // Eski koddan
+        public System.Action OnActiveChanged; // Eski koddan
 
         // Properties
-        public bool IsFull => _displayedItems.Count >= displaySlots.Length;
-        public bool IsEmpty => _displayedItems.Count == 0;
-        public int ItemCount => _displayedItems.Count;
-        public float StockPercentage => displaySlots.Length > 0 ? (float)_displayedItems.Count / displaySlots.Length : 0f;
+        public List<Item> Items => _items;
+        public List<Customer> Customers => _customers;
+        public ItemType CurrentItemType => Data?.AcceptedItemType ?? ItemType.None;
+        public bool IsFull => _items.Count >= (Data?.MaxDisplayItems ?? displaySlots.Length);
+        public bool IsEmpty => _items.Count == 0;
+        public int ItemCount => _items.Count;
+        public float StockPercentage => (Data?.MaxDisplayItems ?? displaySlots.Length) > 0 ? 
+            (float)_items.Count / (Data?.MaxDisplayItems ?? displaySlots.Length) : 0f;
 
         protected override void Start()
         {
             base.Start();
-            interactionType = InteractionType.Shelf;
-            interactionPriority = InteractionPriority.Medium;
             InitializeSlots();
+
+            // Eski koddan - manager'a kayıt
+            // GameManager.Instance.LevelManager.AddShelvesList(this);
+        }
+
+        protected void OnEnable()
+        {
+            RemoveItemOnEnable(); // Eski koddan
+
+            // Manager'a tekrar kayıt
+            // if (GameManager.Instance.LevelManager)
+            //     GameManager.Instance.LevelManager.AddShelvesList(this);
+        }
+
+        protected override void OnDisable()
+        {
+            SaveShelfData(); // Eski koddan
         }
 
         private void InitializeSlots()
@@ -81,19 +100,38 @@ namespace Game.Runtime.Store.Shelves
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error initializing slots: {e.Message}", this);
+                Debug.LogError($"Error initializing shelf slots: {e.Message}", this);
             }
+        }
+
+        // Eski koddan - clear items on enable
+        private void RemoveItemOnEnable()
+        {
+            foreach (Item item in _items)
+            {
+                if (item != null)
+                    item.OnReset();
+            }
+
+            _items.Clear();
+
+            foreach (ItemPlacer placer in itemPlacerList)
+            {
+                if (placer != null)
+                    placer.IsItFull = false;
+            }
+
+            _customers.Clear();
         }
 
         // ==================== PurchasableArea Overrides ====================
 
         protected override bool CanInteractWhenActive(IInteractor interactor)
         {
-            if (interactor?.Character == null) return false;
+            if (interactor?.Character == null || Data == null) return false;
 
             try
             {
-                // ✅ Performance profiling
                 using (PerformanceMonitoringSystem.ProfileInteraction())
                 {
                     var controller = interactor as InteractionController;
@@ -108,7 +146,7 @@ namespace Game.Runtime.Store.Shelves
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error checking interaction capability: {e.Message}", this);
+                Debug.LogError($"Error checking shelf interaction capability: {e.Message}", this);
                 return false;
             }
         }
@@ -121,13 +159,13 @@ namespace Game.Runtime.Store.Shelves
                 if (!controller.HasItemsInHand() || IsFull) return false;
 
                 var carryController = GetCachedCarryController(character);
-                if (carryController == null || shelfData == null) return false;
+                if (carryController == null) return false;
 
-                return carryController.CurrentItemType() == shelfData.AcceptedItemType;
+                return carryController.CurrentItemType() == Data.AcceptedItemType;
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error checking employee interaction: {e.Message}", this);
+                Debug.LogError($"Error checking employee shelf interaction: {e.Message}", this);
                 return false;
             }
         }
@@ -141,39 +179,31 @@ namespace Game.Runtime.Store.Shelves
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error checking customer interaction: {e.Message}", this);
+                Debug.LogError($"Error checking customer shelf interaction: {e.Message}", this);
                 return false;
             }
-        }
-
-        // ✅ Cache carry controllers to avoid repeated GetComponent calls
-        private ICarryingController GetCachedCarryController(BaseCharacterController character)
-        {
-            if (character == null) return null;
-
-            if (!_cachedCarryControllers.TryGetValue(character, out var carryController))
-            {
-                carryController = character.CarryingController;
-                if (carryController != null)
-                {
-                    _cachedCarryControllers[character] = carryController;
-                }
-            }
-
-            return carryController;
         }
 
         protected override void OnActiveInteractionStart(IInteractor interactor)
         {
             try
             {
-                // Clean up previous interaction tween
-                CleanupInteractionTween();
-
-                _interactionTween = transform.DOScale(Vector3.one * interactionScaleAmount, interactionScaleDuration);
-                if (_interactionTween != null)
+                // Carpet scale animation - eski koddan
+                if (carpet != null && interactor.Character is PlayerCharacterController)
                 {
-                    _activeTweens.Add(_interactionTween);
+                    carpet.transform.DOScale(Vector3.one * 1.2f, 0.3f);
+                    OnPlayerIn?.Invoke(); // Eski koddan event
+                }
+
+                // Shelf scale feedback
+                if (Data?.EnableShelfPurchaseVFX == true)
+                {
+                    CleanupShelfInteractionTween();
+                    var scaleTween = transform.DOScale(Vector3.one * Data.InteractionScaleAmount, Data.StockingAnimationDuration);
+                    if (scaleTween != null)
+                    {
+                        _shelfActiveTweens.Add(scaleTween);
+                    }
                 }
             }
             catch (System.Exception e)
@@ -188,7 +218,6 @@ namespace Game.Runtime.Store.Shelves
 
             try
             {
-                // ✅ Performance profiling
                 using (PerformanceMonitoringSystem.ProfileInteraction())
                 {
                     var character = interactor.Character;
@@ -213,12 +242,18 @@ namespace Game.Runtime.Store.Shelves
         {
             try
             {
-                CleanupInteractionTween();
-
-                _interactionTween = transform.DOScale(Vector3.one, interactionScaleDuration);
-                if (_interactionTween != null)
+                // Reset carpet scale - eski koddan
+                if (carpet != null && interactor.Character is PlayerCharacterController)
                 {
-                    _activeTweens.Add(_interactionTween);
+                    carpet.transform.DOScale(Vector3.one, 0.3f);
+                }
+
+                // Reset shelf scale
+                CleanupShelfInteractionTween();
+                var resetTween = transform.DOScale(Vector3.one, Data?.StockingAnimationDuration ?? 0.3f);
+                if (resetTween != null)
+                {
+                    _shelfActiveTweens.Add(resetTween);
                 }
             }
             catch (System.Exception e)
@@ -227,16 +262,16 @@ namespace Game.Runtime.Store.Shelves
             }
         }
 
-        // ==================== STOCKING ====================
+        // ==================== Stocking Logic - Eski koddan ====================
 
         private void TryStockItem(IInteractor interactor)
         {
-            if (IsFull || interactor?.Character == null || shelfData == null) return;
+            if (IsFull || interactor?.Character == null || Data == null) return;
 
             try
             {
                 var carryController = GetCachedCarryController(interactor.Character);
-                if (carryController != null && carryController.CurrentItemType() == shelfData.AcceptedItemType)
+                if (carryController != null && carryController.CurrentItemType() == Data.AcceptedItemType)
                 {
                     Item item = carryController.RemoveTopItem();
                     if (item != null)
@@ -247,7 +282,7 @@ namespace Game.Runtime.Store.Shelves
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error stocking item: {e.Message}", this);
+                Debug.LogError($"Error stocking item on shelf: {e.Message}", this);
             }
         }
 
@@ -257,29 +292,40 @@ namespace Game.Runtime.Store.Shelves
 
             try
             {
-                Transform slot = GetEmptySlot();
-                if (slot != null)
+                ItemPlacer placer = ChoosePlace();
+                if (placer != null)
                 {
-                    item.OnPlacedOnShelf(slot);
+                    item.transform.parent = placer.transform;
 
-                    // ✅ Animate placement with proper tween tracking
-                    item.transform.localScale = Vector3.zero;
-                    Tween placementTween = item.transform.DOScale(1f, stockAnimationDuration)
-                        .SetEase(Ease.OutBack)
+                    // Animation - eski koddan inspired with data-driven values
+                    var animDuration = Data?.StockingAnimationDuration ?? 1f;
+                    var jumpPower = 1f; // Data'dan alınabilir
+                    var ease = Ease.OutFlash; // Data'dan alınabilir
+
+                    var jumpTween = item.transform.DOLocalJump(Vector3.zero, jumpPower, 1, animDuration)
+                        .SetEase(ease)
                         .OnComplete(() =>
                         {
-                            // ✅ Performance tracking
-                            _totalItemsStocked++;
-                            _lastStockTime = Time.time;
+                            if (item != null)
+                            {
+                                _items.Add(item);
+                                SaveShelfData();
+                            }
                         });
-                    
-                    if (placementTween != null)
+
+                    if (jumpTween != null)
                     {
-                        _activeTweens.Add(placementTween);
+                        _shelfActiveTweens.Add(jumpTween);
                     }
 
-                    _slotItemMap[slot] = item;
-                    _displayedItems.Add(item);
+                    var rotateTween = item.transform.DOLocalRotate(Vector3.zero, animDuration).SetEase(ease);
+                    if (rotateTween != null)
+                    {
+                        _shelfActiveTweens.Add(rotateTween);
+                    }
+
+                    placer.IsItFull = true;
+                    item.Placer = placer; // Eski koddan property
 
                     OnItemStocked?.Invoke(item);
                 }
@@ -290,7 +336,7 @@ namespace Game.Runtime.Store.Shelves
             }
         }
 
-        // ==================== CUSTOMER PURCHASE ====================
+        // ==================== Customer Purchase Logic - Eski koddan ====================
 
         private void TryTakeItem(IInteractor interactor)
         {
@@ -298,84 +344,125 @@ namespace Game.Runtime.Store.Shelves
 
             try
             {
-                var carryController = GetCachedCarryController(interactor.Character);
+                var character = interactor.Character;
+                var carryController = GetCachedCarryController(character);
+
                 if (carryController != null && !carryController.IsFull())
                 {
-                    Item item = GetLastItem();
-                    if (item != null && carryController.TryPickupItem(item))
+                    // Customer capacity check - eski koddan
+                    if (character is Customer customer)
                     {
-                        RemoveItemFromShelf(item);
-                        
-                        // ✅ Performance tracking
-                        _totalItemsSold++;
-                        
-                        OnItemPurchased?.Invoke(item);
+                        if (_items.Count > 0 && character.ItemsCount.Count < customer.Capacity)
+                        {
+                            // Position check - eski koddan
+                            if (IsCustomerInPosition(customer))
+                            {
+                                Item item = RemoveItemFromShelf();
+                                if (item != null)
+                                {
+                                    customer.AddItemList(item); // Eski koddan method
+                                    OnItemPurchased?.Invoke(item);
+                                }
+                            }
+                        }
+                        else if (character.Items.Count == customer.Capacity)
+                        {
+                            // Customer is full - send to cash register - eski koddan
+                            // GameManager.Instance.LevelManager.CashRegister.AddCustomers(customer);
+                            RemoveCustomerList(customer);
+                        }
                     }
                 }
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error taking item: {e.Message}", this);
+                Debug.LogError($"Error customer taking item: {e.Message}", this);
             }
         }
 
-        private void RemoveItemFromShelf(Item item)
+        private bool IsCustomerInPosition(Customer customer)
         {
-            if (item == null) return;
+            if (customer?.Target == null) return false;
+
+            float threshold = 0.1f;
+            return Mathf.Abs(customer.transform.position.x - customer.Target.position.x) < threshold &&
+                   Mathf.Abs(customer.transform.position.z - customer.Target.position.z) < threshold;
+        }
+
+        private Item RemoveItemFromShelf()
+        {
+            if (_items.Count == 0) return null;
 
             try
             {
-                // Find and clear slot
-                foreach (var kvp in _slotItemMap)
+                Item item = _items[_items.Count - 1];
+                
+                if (item?.Placer != null)
                 {
-                    if (kvp.Value == item)
-                    {
-                        _slotItemMap[kvp.Key] = null;
-                        break;
-                    }
+                    item.Placer.IsItFull = false;
                 }
 
-                _displayedItems.Remove(item);
+                _items.Remove(item);
+                SaveShelfData();
 
-                if (autoArrange)
+                if (Data?.AutoArrange == true)
                 {
                     RearrangeItems();
                 }
+
+                return item;
             }
             catch (System.Exception e)
             {
                 Debug.LogError($"Error removing item from shelf: {e.Message}", this);
+                return null;
             }
         }
 
-        // ==================== UTILITY ====================
+        // ==================== Item Management - Eski koddan ====================
 
-        private Transform GetEmptySlot()
+        public void AddItemFromItems(Item item, bool isLoad = false)
         {
-            if (_slotItemMap == null) return null;
+            if (item == null) return;
 
-            foreach (var kvp in _slotItemMap)
+            ItemPlacer placer = ChoosePlace();
+            if (placer != null)
             {
-                if (kvp.Value == null && kvp.Key != null)
-                    return kvp.Key;
+                item.transform.parent = placer.transform;
+                placer.IsItFull = true;
+                item.Placer = placer;
+                _items.Add(item);
+                SaveShelfData();
+
+                if (isLoad)
+                {
+                    item.transform.localPosition = Vector3.zero;
+                    item.transform.localRotation = Quaternion.identity;
+                }
             }
-            return null;
         }
 
-        private Item GetLastItem()
+        public void RemoveAllItems()
         {
-            return _displayedItems.Count > 0 ? _displayedItems[_displayedItems.Count - 1] : null;
+            foreach (Item item in _items)
+            {
+                if (item != null)
+                    item.OnReset();
+            }
+
+            _items.Clear();
+            ClearPlacers();
+            _customers.Clear();
         }
 
         private void RearrangeItems()
         {
-            if (displaySlots == null) return;
+            if (displaySlots == null || Data?.AutoArrange != true) return;
 
             try
             {
-                // ✅ Use temp list to avoid allocation
                 _tempItemList.Clear();
-                _tempItemList.AddRange(_displayedItems);
+                _tempItemList.AddRange(_items);
 
                 InitializeSlots();
 
@@ -387,13 +474,14 @@ namespace Game.Runtime.Store.Shelves
                         Transform slot = displaySlots[index];
                         if (slot != null)
                         {
-                            Tween moveTween = item.transform.DOMove(slot.position, rearrangeAnimationDuration)
+                            var moveTween = item.transform.DOMove(slot.position, Data.RearrangeAnimationDuration)
                                 .SetEase(Ease.OutQuad);
                             
                             if (moveTween != null)
                             {
-                                _activeTweens.Add(moveTween);
+                                _shelfActiveTweens.Add(moveTween);
                             }
+
                             _slotItemMap[slot] = item;
                         }
                         index++;
@@ -404,8 +492,107 @@ namespace Game.Runtime.Store.Shelves
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error rearranging items: {e.Message}", this);
+                Debug.LogError($"Error rearranging shelf items: {e.Message}", this);
             }
+        }
+
+        private ItemPlacer ChoosePlace()
+        {
+            for (int i = 0; i < itemPlacerList.Count; i++)
+            {
+                if (itemPlacerList[i] != null && !itemPlacerList[i].IsItFull)
+                    return itemPlacerList[i];
+            }
+            return null;
+        }
+
+        // ==================== Customer Management - Eski koddan ====================
+
+        public void AddCustomerList(Customer customer)
+        {
+            if (customer != null && !_customers.Contains(customer))
+            {
+                _customers.Add(customer);
+            }
+        }
+
+        public void RemoveCustomerList(Customer customer)
+        {
+            if (_customers.Contains(customer))
+            {
+                if (customer.ShelfPlacer != null)
+                    customer.ShelfPlacer.IsItFull = false;
+
+                _customers.Remove(customer);
+            }
+        }
+
+        public ItemPlacer ChooseEmployeePlace()
+        {
+            for (int i = 0; i < employeeTargets.Count; i++)
+            {
+                if (employeeTargets[i] != null && !employeeTargets[i].IsItFull)
+                {
+                    employeeTargets[i].IsItFull = true;
+                    return employeeTargets[i];
+                }
+            }
+            return null;
+        }
+
+        public ItemPlacer ChooseCustomerPlace()
+        {
+            for (int i = 0; i < customerTargets.Count; i++)
+            {
+                if (customerTargets[i] != null && !customerTargets[i].IsItFull)
+                {
+                    customerTargets[i].IsItFull = true;
+                    return customerTargets[i];
+                }
+            }
+            return null;
+        }
+
+        public void ClearPlacers()
+        {
+            foreach (ItemPlacer placer in customerTargets)
+            {
+                if (placer != null)
+                    placer.IsItFull = false;
+            }
+
+            foreach (ItemPlacer placer in employeeTargets)
+            {
+                if (placer != null)
+                    placer.IsItFull = false;
+            }
+        }
+
+        public Transform GetCustomerBrowsePoint()
+        {
+            if (customerBrowsePoints != null && customerBrowsePoints.Length > 0)
+            {
+                return customerBrowsePoints[Random.Range(0, customerBrowsePoints.Length)];
+            }
+            return transform;
+        }
+
+        // ==================== Utility Methods ====================
+
+        private ICarryingController GetCachedCarryController(BaseCharacterController character)
+        {
+            if (character == null) return null;
+
+            if (!_cachedCarryControllers.TryGetValue(character, out var carryController))
+            {
+                carryController = character.CarryingController;
+                if (carryController != null)
+                {
+                    _cachedCarryControllers[character] = carryController;
+                }
+            }
+
+            return carryController;
         }
 
         private bool IsEmployeeOrPlayer(BaseCharacterController character)
@@ -422,64 +609,116 @@ namespace Game.Runtime.Store.Shelves
             return aiController != null && aiController.Data?.CharacterType == CharacterType.AI_Customer;
         }
 
-        public Transform GetCustomerBrowsePoint()
+        // ==================== Save/Load - Eski koddan ====================
+
+        private void SaveShelfData()
         {
-            if (customerBrowsePoints != null && customerBrowsePoints.Length > 0)
+            if (string.IsNullOrEmpty(AreaId)) return;
+
+            try
             {
-                return customerBrowsePoints[Random.Range(0, customerBrowsePoints.Length)];
+                string itemCountKey = AreaId + "_ItemCount";
+                PlayerPrefs.SetInt(itemCountKey, _items.Count);
+                PlayerPrefs.Save();
             }
-            return transform;
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error saving shelf data: {e.Message}", this);
+            }
         }
 
-        // ✅ Performance monitoring methods
+        private void LoadShelfData()
+        {
+            if (string.IsNullOrEmpty(AreaId)) return;
+
+            try
+            {
+                string itemCountKey = AreaId + "_ItemCount";
+                
+                if (PlayerPrefs.HasKey(itemCountKey))
+                {
+                    int itemCount = PlayerPrefs.GetInt(itemCountKey);
+                    
+                    // Load items - bu kısım item pool system ile güncellenebilir
+                    // for (int i = 0; i < itemCount; i++)
+                    // {
+                    //     Item item = GameManager.Instance.ObjectPoolingManager.GetItemFromPool(CurrentItemType);
+                    //     if (item != null)
+                    //     {
+                    //         item.gameObject.SetActive(true);
+                    //         AddItemFromItems(item, true);
+                    //     }
+                    // }
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error loading shelf data: {e.Message}", this);
+            }
+        }
+
+        // ==================== Restock Logic - Data-driven ====================
+
+        public bool NeedsRestock()
+        {
+            return Data?.NeedsRestock(_items.Count) ?? false;
+        }
+
+        public int GetRestockAmount()
+        {
+            return Data?.GetRestockAmount(_items.Count) ?? 0;
+        }
+
+        public float GetRestockPercentage()
+        {
+            return Data?.GetStockPercentage(_items.Count) ?? 0f;
+        }
+
+        // ==================== Performance Monitoring ====================
+
         public float GetStockingRate()
         {
-            if (_totalItemsStocked == 0) return 0f;
-            return _totalItemsStocked / (Time.time - _lastStockTime);
+            // Bu implement edilebilir - kaç item/saniye stoklandığı
+            return 0f;
         }
 
         public int GetTotalItemsStocked()
         {
-            return _totalItemsStocked;
+            return _items.Count;
         }
 
         public int GetTotalItemsSold()
         {
-            return _totalItemsSold;
+            // Bu track edilebilir
+            return 0;
         }
 
-        public float GetSalesRate()
-        {
-            if (_totalItemsSold == 0) return 0f;
-            return _totalItemsSold / Time.time;
-        }
+        // ==================== Cleanup ====================
 
-        // ==================== CLEANUP ====================
-
-        private void CleanupInteractionTween()
+        private void CleanupShelfInteractionTween()
         {
-            if (_interactionTween != null && _interactionTween.IsActive())
+            // Shelf-specific interaction tweens cleanup
+            var interactionTweens = _shelfActiveTweens.FindAll(t => t != null && t.IsActive());
+            foreach (var tween in interactionTweens)
             {
-                _interactionTween.Kill();
-                _activeTweens.Remove(_interactionTween);
-                _interactionTween = null;
+                if (tween.IsActive()) tween.Kill();
             }
+            
+            _shelfActiveTweens.RemoveAll(t => t == null || !t.IsActive());
         }
 
-        private void CleanupAllTweens()
+        private void CleanupAllShelfTweens()
         {
             try
             {
-                foreach (var tween in _activeTweens)
+                foreach (var tween in _shelfActiveTweens)
                 {
                     if (tween != null && tween.IsActive())
                     {
                         tween.Kill();
                     }
                 }
-                _activeTweens.Clear();
-
-                CleanupInteractionTween();
+                _shelfActiveTweens.Clear();
             }
             catch (System.Exception e)
             {
@@ -489,28 +728,98 @@ namespace Game.Runtime.Store.Shelves
 
         protected override void OnDestroy()
         {
-            CleanupAllTweens();
+            CleanupAllShelfTweens();
             _cachedCarryControllers.Clear();
             base.OnDestroy();
         }
 
-        void OnDisable()
-        {
-            CleanupAllTweens();
-        }
+        // ==================== Debug ====================
 
-        // ✅ Debug information
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         [ContextMenu("Show Shelf Stats")]
         private void ShowShelfStats()
         {
+            if (Data == null)
+            {
+                Debug.LogWarning("No shelf data assigned!");
+                return;
+            }
+
             Debug.Log($"Shelf Stats:\n" +
-                     $"Items Stocked: {_totalItemsStocked}\n" +
-                     $"Items Sold: {_totalItemsSold}\n" +
-                     $"Current Stock: {ItemCount}/{displaySlots?.Length ?? 0}\n" +
-                     $"Stock Percentage: {StockPercentage:P}\n" +
-                     $"Sales Rate: {GetSalesRate():F2} items/sec");
+                     $"Accepted Item: {Data.AcceptedItemType}\n" +
+                     $"Current Stock: {ItemCount}/{Data.MaxDisplayItems}\n" +
+                     $"Stock Percentage: {GetRestockPercentage():P}\n" +
+                     $"Needs Restock: {NeedsRestock()}\n" +
+                     $"Customers: {_customers.Count}/{Data.MaxCustomersAtOnce}\n" +
+                     $"Auto Arrange: {Data.AutoArrange}\n" +
+                     $"State: {CurrentState}");
         }
-        #endif
+
+        [ContextMenu("Clear All Items")]
+        private void ClearAllItems()
+        {
+            RemoveAllItems();
+            Debug.Log("All shelf items cleared!");
+        }
+
+        [ContextMenu("Force Restock")]
+        private void ForceRestock()
+        {
+            if (Data == null) return;
+
+            int restockAmount = GetRestockAmount();
+            Debug.Log($"Need to restock {restockAmount} items of type {Data.AcceptedItemType}");
+        }
+#endif
+    }
+
+    // ==================== Support Classes - Eski koddan ====================
+
+    [System.Serializable]
+    public class Customer : BaseCharacterController
+    {
+        [Header("Customer Settings")]
+        [SerializeField] private int capacity = 5;
+        [SerializeField] private Transform target;
+        [SerializeField] private ItemPlacer shelfPlacer;
+
+        private List<Item> items = new List<Item>();
+
+        public int Capacity => capacity;
+        public Transform Target => target;
+        public ItemPlacer ShelfPlacer 
+        { 
+            get => shelfPlacer; 
+            set => shelfPlacer = value; 
+        }
+        public List<Item> Items => items;
+        public List<Item> ItemsCount => items; // Eski koddan compatibility
+
+        // Eski koddan methods
+        public void AddItemList(Item item)
+        {
+            if (item != null && items.Count < capacity)
+            {
+                items.Add(item);
+            }
+        }
+
+        public Item RemoveItemList(ItemType itemType)
+        {
+            for (int i = items.Count - 1; i >= 0; i--)
+            {
+                if (items[i].ItemType == itemType)
+                {
+                    Item item = items[i];
+                    items.RemoveAt(i);
+                    return item;
+                }
+            }
+            return null;
+        }
+
+        // Base class overrides - placeholder
+        protected override void OnInitialize() { }
+        protected override void HandleInput() { }
     }
 }

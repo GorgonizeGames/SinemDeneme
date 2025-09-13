@@ -12,7 +12,7 @@ namespace Game.Runtime.Core.Data
 #endif
         public string id;
 
-        protected void OnValidate()
+        protected virtual void OnValidate()
         {
 #if UNITY_EDITOR
             if (string.IsNullOrEmpty(id))

@@ -7,7 +7,6 @@ namespace Game.Runtime.Interactions.Interfaces
         void OnInteractionContinue(IInteractor interactor);
         void OnInteractionEnd(IInteractor interactor);
         InteractionType InteractionType { get; }
-        InteractionPriority Priority { get; }
     }
 
     public enum InteractionType
@@ -17,13 +16,5 @@ namespace Game.Runtime.Interactions.Interfaces
         CashRegister,
         Zone,
         Purchasable
-    }
-
-    public enum InteractionPriority
-    {
-        Low = 0,
-        Medium = 1,
-        High = 2,
-        Critical = 3
     }
 }
