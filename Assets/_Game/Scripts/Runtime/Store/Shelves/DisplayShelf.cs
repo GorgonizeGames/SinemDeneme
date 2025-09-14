@@ -792,9 +792,7 @@ namespace Game.Runtime.Store.Shelves
             get => shelfPlacer; 
             set => shelfPlacer = value; 
         }
-        public List<Item> Items => items;
-        public List<Item> ItemsCount => items; // Eski koddan compatibility
-
+        
         // Eski koddan methods
         public void AddItemList(Item item)
         {

@@ -52,7 +52,6 @@ namespace Game.Runtime.Store.Machines
         private List<Item> _items = new List<Item>();
         private Coroutine _productionCoroutine;
         private bool _isProducing = false;
-        private int _currentSlotIndex = 0;
 
         // Performance optimizations
         private readonly List<Tween> _machineActiveTweens = new List<Tween>();

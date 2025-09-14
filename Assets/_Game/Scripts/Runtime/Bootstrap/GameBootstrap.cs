@@ -4,8 +4,9 @@ using Game.Runtime.Core.Interfaces;
 using Game.Runtime.Input;
 using Game.Runtime.Game;
 using Game.Runtime.Economy;
-using Game.Runtime.Items;
 using Game.Runtime.Items.Services;
+using Game.Runtime.UI.Core;
+using Game.Runtime.UI.Signals;
 
 namespace Game.Runtime.Bootstrap
 {
@@ -19,7 +20,20 @@ namespace Game.Runtime.Bootstrap
         [SerializeField] private EconomyService economyService;
         [SerializeField] private ItemPoolService itemPoolService;
 
-        private bool _servicesRegistered = false;
+        [Header("UI Services")]
+        [SerializeField] private UIService uiService;
+
+        [Header("Controllers")]
+        [SerializeField] private GameStateController gameStateController;
+
+        [Header("UI Handlers - All Event-Driven")]
+        [SerializeField] private UI.UIStateHandler uiStateHandler;
+        [SerializeField] private UI.EconomyUIHandler economyUIHandler; // ← YENİ!
+        [SerializeField] private UI.CheatUIHandler cheatUIHandler;
+        [SerializeField] private UI.SettingsUIHandler settingsUIHandler;
+
+        [Header("Input Controllers")]
+        [SerializeField] private UI.Input.CheatInputController cheatInputController;
 
         void Awake()
         {
@@ -29,54 +43,90 @@ namespace Game.Runtime.Bootstrap
 
         void Start()
         {
-            if (_servicesRegistered)
-            {
-                StartGame();
-            }
+            Debug.Log("🚀 Complete Event-Driven System Started!");
         }
 
         private void ValidateReferences()
         {
-            if (gameManager == null)
-                Debug.LogError("[GameBootstrap] GameManager is not assigned!", this);
-
-            if (inputService == null)
-                Debug.LogError("[GameBootstrap] InputService is not assigned!", this);
-
-            if (economyService == null)
-                Debug.LogError("[GameBootstrap] EconomyService is not assigned!", this);
-
-            if (itemPoolService == null)
-                Debug.LogError("[GameBootstrap] ItemPoolService is not assigned!", this);
+            // Core validations
+            if (gameManager == null) Debug.LogError("[GameBootstrap] GameManager missing!");
+            if (inputService == null) Debug.LogError("[GameBootstrap] InputService missing!");
+            if (economyService == null) Debug.LogError("[GameBootstrap] EconomyService missing!");
+            if (itemPoolService == null) Debug.LogError("[GameBootstrap] ItemPoolService missing!");
+            if (uiService == null) Debug.LogError("[GameBootstrap] UIService missing!");
+            if (gameStateController == null) Debug.LogError("[GameBootstrap] GameStateController missing!");
+            
+            // Handler validations
+            if (uiStateHandler == null) Debug.LogError("[GameBootstrap] UIStateHandler missing!");
+            if (economyUIHandler == null) Debug.LogError("[GameBootstrap] EconomyUIHandler missing!");
+            if (cheatUIHandler == null) Debug.LogError("[GameBootstrap] CheatUIHandler missing!");
+            if (settingsUIHandler == null) Debug.LogError("[GameBootstrap] SettingsUIHandler missing!");
+            if (cheatInputController == null) Debug.LogError("[GameBootstrap] CheatInputController missing!");
         }
 
         private void RegisterAllServices()
         {
             // Core services
-            if (gameManager != null)
-                Dependencies.Container.Register<IGameManager>(gameManager);
+            Dependencies.Container.Register<IGameManager>(gameManager);
+            Dependencies.Container.Register<IInputService>(inputService);
+            Dependencies.Container.Register<IEconomyService>(economyService);
+            Dependencies.Container.Register<IItemPoolService>(itemPoolService);
 
-            if (inputService != null)
-                Dependencies.Container.Register<IInputService>(inputService);
+            // UI services
+            Dependencies.Container.Register<IUIService>(uiService);
+            
+            // Signal services
+            var uiSignals = new UISignals();
+            Dependencies.Container.Register<IUISignals>(uiSignals);
+            
+            // Game state events
+            var gameStateEvents = new GameStateEvents();
+            Dependencies.Container.Register<IGameStateEvents>(gameStateEvents);
 
-            // Game services
-            if (economyService != null)
-                Dependencies.Container.Register<IEconomyService>(economyService);
-
-            if (itemPoolService != null)
-                Dependencies.Container.Register<IItemPoolService>(itemPoolService);
-
-            _servicesRegistered = true;
-            Debug.Log("🚀 All services registered successfully!");
+            Debug.Log("🚀 Complete Event-Driven Architecture registered!");
+            Debug.Log("📊 Total Services: " + Dependencies.Container.ServiceCount);
         }
 
-        private void StartGame()
+#if UNITY_EDITOR
+        [ContextMenu("Validate Event-Driven Architecture")]
+        private void ValidateArchitecture()
         {
-            if (gameManager != null)
-            {
-                gameManager.SetState(GameState.Playing);
-                Debug.Log("🎮 Game started!");
-            }
+            Debug.Log("🔍 Event-Driven Architecture Validation:");
+            
+            bool allValid = true;
+            
+            // Check all required services
+            allValid &= LogServiceStatus<IGameManager>("GameManager");
+            allValid &= LogServiceStatus<IEconomyService>("EconomyService");
+            allValid &= LogServiceStatus<IUIService>("UIService");
+            allValid &= LogServiceStatus<IUISignals>("UISignals");
+            allValid &= LogServiceStatus<IGameStateEvents>("GameStateEvents");
+            
+            // Check all handlers are assigned
+            allValid &= LogHandlerStatus("UIStateHandler", uiStateHandler);
+            allValid &= LogHandlerStatus("EconomyUIHandler", economyUIHandler);
+            allValid &= LogHandlerStatus("CheatUIHandler", cheatUIHandler);
+            allValid &= LogHandlerStatus("SettingsUIHandler", settingsUIHandler);
+            
+            if (allValid)
+                Debug.Log("✅ Event-Driven Architecture is complete!");
+            else
+                Debug.LogError("❌ Some components are missing!");
         }
+        
+        private bool LogServiceStatus<T>(string serviceName) where T : class
+        {
+            bool isRegistered = Dependencies.Container.IsRegistered<T>();
+            Debug.Log($"  - {serviceName}: {(isRegistered ? "✅" : "❌")}");
+            return isRegistered;
+        }
+        
+        private bool LogHandlerStatus(string handlerName, MonoBehaviour handler)
+        {
+            bool isAssigned = handler != null;
+            Debug.Log($"  - {handlerName}: {(isAssigned ? "✅" : "❌")}");
+            return isAssigned;
+        }
+#endif
     }
 }
